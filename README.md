@@ -30,39 +30,34 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 - 📽️ **Incident Replay** — Snapshot-based historical scrubbing at major incident boundaries
 - 🔗 **Correlated Event Pipeline** — 6 unified scenario detectors cross-correlating RAN + Mobility + Context signals
 
----
-
-## Architecture Summary
+### System Architecture
 
 ```
 Streamlit Dashboard (8500) ──SSE──> FastAPI Server (8400) ──> Telemetry Streamer
-                                                      │
-                                                      ↓
-                                        AI Correlation & Analytics Layer
-                                                      │
-                                                      ↓
-                                        Google ADK Multi-Agent Orchestration
-                                               │
-                         ┌──────────┬──────────┼──────────┬──────────┐
-                         │ RAN      │Mobility  │Context   │ Policy   │
-                         │ Agent    │ Agent    │ Agent    │ Agent    │
-                         └──────────┴──────────┴──────────┴──────────┘
+                                             │
+                                             ↓
+                              AI Correlation & Analytics Layer
+                                             │
+                                             ↓
+                             Google ADK Multi-Agent Orchestration
+                                             │
+                        ┌─────────┬──────────┼──────────┬─────────┐
+                        │   RAN   │ Mobility │ Context  │ Policy  │
+                        │  Agent  │  Agent   │  Agent   │  Agent  │
+                        └─────────┴──────────┴──────────┴─────────┘
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 
+### Multi-agent Design
+
+[AGENTS.md](AGENTS.md) -> system details (5 agents + ADK tools)
+
 ---
 
-## Documentation
+## Dashboard UI
 
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, tech stack, project structure |
-| [AGENTS.md](AGENTS.md) | Multi-agent system details (5 agents + ADK tools) |
-| [DASHBOARD.md](DASHBOARD.md) | Dashboard features, charts, maps, autonomous actions |
-| [GETTING_STARTED.md](GETTING_STARTED.md) | Installation, running, configuration, demo workflow |
-| [SCENARIO.md](SCENARIO.md) | Taipei Arena concert egress scenario, 7 incident arcs |
-| [USER_GUIDE.md](USER_GUIDE.md) | Example questions users can ask the multi-agent system |
+[DASHBOARD.md](DASHBOARD.md) -> Dashboard features, charts, maps, autonomous actions
 
 ---
 
@@ -72,11 +67,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure
+# 2. Configure .env file
 cp .env.example .env
 # Add your OLLAMA_API_KEY to .env
 
-# 3. Run
+# 3. Run auto script
 ./run.sh
 ```
 
@@ -85,6 +80,45 @@ cp .env.example .env
 - **API**: http://localhost:8400
 
 See [GETTING_STARTED.md](GETTING_STARTED.md) for full instructions.
+
+---
+
+## Demo Scenario
+
+The **Taipei Arena Power Station Concert Egress** (May 15, 2026, 22:00) simulates ~1,500 subscribers exiting a concert under heavy rain (0→12 mm/hr). The crowd funnels toward the Nanjing Fuxing MRT, creating a cascading network crisis across 7 incident arcs:
+
+| Arc | Trigger | Autonomous Response |
+|-----|---------|---------------------|
+| **VIP Degradation** | VIP RSRP < −105 dBm underground | VIP Priority Routing approved at 92% confidence |
+| **MRT Overload Cascade** | MRT DAS cell PRB > 90% | Temporary Load Balancing triggered |
+| **Weather Transition** | Rain spikes 0→12 mm/hr at tick ~50 | MRT capacity reallocation + slip-risk alert |
+| **Handover Storm** | Underground transition phase 0.65–0.80 | Micro-cell Handover + DAS steering |
+| **Anomaly Burst** | 20% UEs with CQI 2–3 for 10 ticks | `get_anomaly_report()` + diagnostic scan |
+| **YouBike Starvation** | All 60 docks empty | Frustration index + MRT pressure alert |
+| **Secondary Congestion** | Neighboring cell PRB > 85% from load-balance | Action blocked, alternative path proposed |
+
+All 7 arcs hit within a 20-minute window, stress-testing the multi-agent system under realistic cascading conditions — weather shifts, underground signal decay, VIP SLA breaches, and policy loop conflicts.
+
+See [SCENARIO.md](SCENARIO.md) for full timeline and trigger details.
+
+---
+
+## Demo Questions
+
+Users interact with the multi-agent system via natural language — queries are routed to the appropriate specialist agent (RAN, Mobility, Context, or Policy) and resolved autonomously. Example queries include:
+
+| Domain | Example Questions |
+|--------|-------------------|
+| **Orchestrator** | *"What is happening right now in the network?"*, *"Should I be concerned in the next 5 minutes?"* |
+| **RAN** | *"Show me active signal cliffs and handover failure rates"*, *"Generate a full anomaly report"* |
+| **Mobility** | *"What is the MRT congestion status at each exit?"*, *"What is the current slip risk?"* |
+| **Context** | *"How is weather affecting subscriber behavior?"*, *"Calculate walking propensity"* |
+| **Policy** | *"Should I enable VIP Priority Routing now?"*, *"Would load balancing cause secondary congestion?"* |
+| **VIP Analytics** | *"Show top 10 VIP subscribers by QoE degradation"*, *"Predict SLA breach in the next 5 minutes"* |
+
+All autonomous actions require ≥85% confidence and ≥10% expected improvement before Policy agent approval.
+
+See [USER_GUIDE.md](USER_GUIDE.md) for the full question library.
 
 ---
 
