@@ -35,8 +35,8 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Streamlit Dashboard (Port 8500)                  │
+┌───────────────────────────────────────────────────────────────────┐
+│                    Streamlit Dashboard (Port 8500)                │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
 │  │  Executive   │  │  Live RAN    │  │  Mobility    │             │
 │  │  KPI Panel   │  │  Telemetry   │  │  Map         │             │
@@ -46,61 +46,61 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 │  │  Agent       │  │  Actions     │  │  Analytics   │             │
 │  │  Console     │  │  Panel       │  │              │             │
 │  └──────────────┘  └──────────────┘  └──────────────┘             │
-└─────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────┘
                                 ↓ SSE (Server-Sent Events)
-┌─────────────────────────────────────────────────────────────────────┐
-│              FastAPI SSE Server (Port 8400)                         │
-│  Endpoint: /stream-trace → Real-time telemetry events              │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│              FastAPI SSE Server (Port 8400)                       │
+│  Endpoint: /stream-trace → Real-time telemetry events             │
+└───────────────────────────────────────────────────────────────────┘
                                 ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│              Telemetry Streamer (500ms ticks)                       │
-│  • Generates 10-20 UE traces per tick                               │
-│  • Simulates crowd egress (Arena → MRT)                             │
-│  • Models signal degradation, congestion, handovers                 │
-│  • Injects 7 escalating incident arcs                               │
-│  • Triggers correlated event detection                              │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│              Telemetry Streamer (500ms ticks)                     │
+│  • Generates 10-20 UE traces per tick                             │
+│  • Simulates crowd egress (Arena → MRT)                           │
+│  • Models signal degradation, congestion, handovers               │
+│  • Injects 7 escalating incident arcs                             │
+│  • Triggers correlated event detection                            │
+└───────────────────────────────────────────────────────────────────┘
                                 ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│         AI Correlation & Analytics Layer                            │
-│  ┌──────────────────┐  ┌──────────────────┐                        │
-│  │ RAN Intelligence │  │ Mobility         │                        │
-│  │ Engine           │  │ Intelligence     │                        │
-│  │ • Signal cliffs  │  │ • MRT congestion │                        │
-│  │ • Mass egress    │  │ • YouBike status │                        │
-│  │ • Congestion     │  │ • Slip risk      │                        │
-│  └──────────────────┘  └──────────────────┘                        │
-│  ┌──────────────────┐  ┌──────────────────┐                        │
-│  │ Context          │  │ Policy           │                        │
-│  │ Intelligence     │  │ Validation       │                        │
-│  │ • Weather impact │  │ • Action approval│                        │
-│  │ • Walking        │  │ • SLA enforcement│                        │
-│  │   propensity     │  │ • Governance     │                        │
-│  └──────────────────┘  └──────────────────┘                        │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│         AI Correlation & Analytics Layer                          │
+│  ┌──────────────────┐  ┌──────────────────┐                       │
+│  │ RAN Intelligence │  │ Mobility         │                       │
+│  │ Engine           │  │ Intelligence     │                       │
+│  │ • Signal cliffs  │  │ • MRT congestion │                       │
+│  │ • Mass egress    │  │ • YouBike status │                       │
+│  │ • Congestion     │  │ • Slip risk      │                       │
+│  └──────────────────┘  └──────────────────┘                       │
+│  ┌──────────────────┐  ┌──────────────────┐                       │
+│  │ Context          │  │ Policy           │                       │
+│  │ Intelligence     │  │ Validation       │                       │
+│  │ • Weather impact │  │ • Action approval│                       │
+│  │ • Walking        │  │ • SLA enforcement│                       │
+│  │   propensity     │  │ • Governance     │                       │
+│  └──────────────────┘  └──────────────────┘                       │
+└───────────────────────────────────────────────────────────────────┘
                                 ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│         Google ADK Multi-Agent Orchestration                        │
-│                                                                     │
-│              ┌─────────────────────────────┐                        │
-│              │  Intent Orchestration Agent │                        │
-│              │  (root_agent)               │                        │
-│              │  • Coordinates sub-agents   │                        │
-│              │  • Interprets user intent   │                        │
-│              │  • Provides unified intel   │                        │
-│              └─────────────────────────────┘                        │
-│                          ↓                                          │
-│    ┌──────────────┬──────────────┬──────────────┬──────────────┐   │
-│    │              │              │              │              │   │
-│    ▼              ▼              ▼              ▼              ▼   │
-│ ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐       │
-│ │  RAN   │  │Mobility│  │Context │  │ Policy │  │ Tools  │       │
-│ │ Agent  │  │ Agent  │  │ Agent  │  │ Agent  │  │ (7x)   │       │
-│ └────────┘  └────────┘  └────────┘  └────────┘  └────────┘       │
-│                                                                     │
-│  Model: Ollama Cloud (Gemma-4 31B) via LiteLLM                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│         Google ADK Multi-Agent Orchestration                      │
+│                                                                   │
+│              ┌─────────────────────────────┐                      │
+│              │  Intent Orchestration Agent │                      │
+│              │  (root_agent)               │                      │
+│              │  • Coordinates sub-agents   │                      │
+│              │  • Interprets user intent   │                      │
+│              │  • Provides unified intel   │                      │
+│              └─────────────────────────────┘                      │
+│                          ↓                                        │
+│     ┌────────────┬──────────┬───────────┬───────────┐             │
+│     │            │          │           │           │             │
+│     ▼            ▼          ▼           ▼           ▼             │
+│┌────────┐   ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐        │
+││  RAN   │   │Mobility│  │Context │  │ Policy │  │ Tools  │        │
+││ Agent  │   │ Agent  │  │ Agent  │  │ Agent  │  │ (7x)   │        │
+│└────────┘   └────────┘  └────────┘  └────────┘  └────────┘        │
+│                                                                   │
+│  Model: Ollama Cloud (MiniMax M2.5 230B) via LiteLLM              │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -117,8 +117,6 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 - Explains AI reasoning with confidence scores
 
 **Tools**: All 7 ADK tools (RAN state, mobility state, KPI dashboard, subscriber info, VIP info, action validation, action execution)
-
----
 
 ### 2. **RAN Intelligence Agent** (`ran_intelligence_agent`)
 **Role**: Radio Access Network analysis and optimization
@@ -139,8 +137,6 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 - PRB (Physical Resource Block): 0-100% utilization
 - CQI (Channel Quality Indicator): 0-15
 
----
-
 ### 3. **Mobility Intelligence Agent** (`mobility_intelligence_agent`)
 **Role**: Urban mobility and crowd dynamics analysis
 
@@ -158,8 +154,6 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 - YouBike Arena Station (60 docks, real-time availability)
 - Taipei Arena → MRT distance: 450m
 
----
-
 ### 4. **Context Intelligence Agent** (`context_intelligence_agent`)
 **Role**: Environmental awareness and impact analysis
 
@@ -176,8 +170,6 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 - Rainfall > 10mm/hr: Severe risk, majority avoid walking
 - Weather affects subscriber behavior → network load patterns
 
----
-
 ### 5. **Policy Validation Agent** (`policy_validation_agent`)
 **Role**: Autonomous action governance and SLA enforcement
 
@@ -193,6 +185,77 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 - VIP Priority Routing: requires ≥10% expected KPI improvement
 - Load Balancing: must not cause neighboring cell overload
 - All actions: must improve VIP SLA without worsening congestion elsewhere
+
+---
+
+## 📊 Dashboard Features
+
+### Executive KPI Panel
+- Subscriber Satisfaction Score (0-100%)
+- VIP QoE Score (0-100%)
+- Congestion Risk (0-100%)
+- AI Confidence (0-100%)
+- SLA Health (0-100%)
+- Revenue Protection (USD)
+- Predicted Mobility Pressure (0-100%)
+- Monitoring Escalation Level (1-4)
+
+### Live Telemetry Charts
+- **RSRP Trend**: Signal strength over time (VIP vs Standard)
+- **SINR Trend**: Signal quality with good/poor thresholds
+- **Timing Advance**: Distance from cell (mass egress indicator)
+- **PRB Utilization**: Congestion indicator with 80% threshold
+- **Handover Success Rate**: Network stability metric
+- **Congestion Heatmap**: PRB utilization matrix
+
+### Mobility Digital Twin
+- Taipei Arena marker (25.0516, 121.5500)
+- Nanjing Fuxing MRT marker (25.0528, 121.5445)
+- Subscriber dots colored by RSRP quality (green/orange/red)
+- VIP subscribers shown larger
+- Cell sector overlays (macro, small cell, DAS)
+- YouBike station marker
+
+### AI Multi-Agent Reasoning Console
+Real-time chain-of-thought display:
+```
+[RAN Intelligence]
+Signal cliff detected: RSRP drop 18dB
+Underground transition likely
+Handover storm: failure rate at 30%
+
+[Mobility Intelligence]
+Mass egress pattern confirmed
+MRT congestion rising: YELLOW → RED
+YouBike starvation: all 60 docks empty
+
+[Context Intelligence]
+Rainfall spiked to 12mm/hr
+Walking propensity reduced 40%
+Slip risk: MODERATE → HIGH
+
+[Policy Validator]
+VIP Priority Routing: APPROVED (92% confidence)
+Secondary Load Balance: BLOCKED (loop detection)
+  → Would cause neighboring cell PRB to exceed 85%
+
+[Autonomous Action]
+VIP Priority Routing Enabled
+Expected KPI improvement: +23%
+```
+
+### Autonomous Actions
+- **VIP Priority Routing**: Prioritize VIP traffic during congestion
+- **Temporary Load Balancing**: Redistribute load to neighboring cells
+- **Micro-cell Handover**: Steer to small cells for better coverage
+- **Dynamic Slice Allocation**: Adjust network slicing for VIP
+- **Small-cell Steering**: Direct to DAS for underground coverage
+
+Each action includes:
+- Confidence score (0–100%)
+- Reasoning (why this action?)
+- Expected KPI improvement (%)
+- Policy approval status (APPROVED / BLOCKED)
 
 ---
 
@@ -241,11 +304,11 @@ telecom_agent/
 ├── requirements.txt            # Python dependencies
 │
 ├── services/                   # Business logic layer
-│   ├── telemetry_service.py   # Telemetry state management
+│   ├── telemetry_service.py    # Telemetry state management
 │   ├── ran_service.py          # RAN Intelligence Engine
-│   ├── mobility_service.py    # Mobility Intelligence
-│   ├── weather_service.py     # Weather awareness
-│   └── policy_engine.py       # Policy validation + autonomous actions
+│   ├── mobility_service.py     # Mobility Intelligence
+│   ├── weather_service.py      # Weather awareness
+│   └── policy_engine.py        # Policy validation + autonomous actions
 │
 ├── ui/                         # Streamlit UI components
 │   ├── dashboard.py            # Main dashboard
@@ -255,7 +318,7 @@ telecom_agent/
 │
 ├── data/                       # Mock data files
 │   ├── mock_cells.json         # Cell deployment (4 cells)
-│   ├── mock_mrt.json          # MRT station (3 exits)
+│   ├── mock_mrt.json           # MRT station (3 exits)
 │   └── mock_youbike.json       # YouBike station
 │
 └── logs/                       # Policy decision logs
@@ -330,6 +393,37 @@ adk web --port 8080 --allow_origins "*" adk_apps
 - **API**: http://localhost:8400 — SSE stream `/stream-trace`, health `/health`
 
 The dashboard auto-connects to the SSE stream when the API is ready.
+
+## 🔧 Configuration
+
+Edit `.env` or `config.py`:
+
+```bash
+# LLM Configuration
+OLLAMA_API_KEY=your_key_here
+OLLAMA_API_BASE=https://ollama.com/v1
+LLM_MODEL=ollama_chat/minimax-m2.5:cloud
+
+# Simulation Parameters
+TELEMETRY_INTERVAL_MS=500        # Telemetry tick interval
+SIMULATION_DENSITY=15            # UEs per tick
+UI_REFRESH_RATE=1                # Dashboard refresh (seconds)
+
+# RAN Thresholds
+CONGESTION_THRESHOLD_PRB=80      # PRB % for congestion alert
+CONFIDENCE_THRESHOLD=85          # Min confidence for autonomous action
+MASS_EGRESS_TA_PCT=0.70          # 70% subscribers with increasing TA
+SIGNAL_CLIFF_DB=15.0             # RSRP drop threshold
+
+# Weather
+ENABLE_WEATHER=true
+WEATHER_FALLBACK_RAIN_MM_HR=0.0
+
+# Ports
+API_PORT=8400
+STREAMLIT_PORT=8500
+ADK_PORT=8080
+```
 
 ---
 
@@ -416,8 +510,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 - **"Summarize the AI reasoning behind recent autonomous actions."**
   → Orchestrator retrieves and explains the chain-of-thought from each agent that contributed to recent actions.
 
----
-
 ### RAN Intelligence
 
 - **"Show me all active signal cliffs and handover failure rates."**
@@ -441,8 +533,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 - **"Generate a full anomaly report for the last 10 minutes."**
   → RAN agent calls `get_anomaly_report()` and returns a formatted diagnostic summary.
 
----
-
 ### Mobility Intelligence
 
 - **"What is the current MRT congestion status at each exit?"**
@@ -463,8 +553,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 - **"What is the slip risk for pedestrians right now?"**
   → Mobility agent retrieves weather-adjusted slip risk (LOW/MODERATE/HIGH/SEVERE) based on rainfall intensity.
 
----
-
 ### Context Intelligence
 
 - **"How is the current weather affecting subscriber behavior?"**
@@ -481,8 +569,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 
 - **"What is the combined weather + crowd risk score?"**
   → Context agent fuses rainfall, slip risk, crowd density, and MRT congestion into a unified risk score.
-
----
 
 ### Policy Validation
 
@@ -504,8 +590,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 - **"Revert the last autonomous action."**
   → Policy agent validates the rollback request and triggers `trigger_autonomous_action()` with rollback semantics.
 
----
-
 ### Subscriber & VIP Analytics
 
 - **"Show me the top 10 VIP subscribers by QoE degradation."**
@@ -519,8 +603,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 
 - **"Predict which VIP subscribers will breach SLA in the next 5 minutes."**
   → Uses RAN + mobility trend analysis to predict VIP QoE drop below 80 and estimates time-to-breach.
-
----
 
 ### KPI & Executive Dashboard
 
@@ -536,8 +618,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 - **"What is the AI confidence level for the current operational state?"**
   → Returns the AI Confidence KPI (0–100%) based on model agreement across all active agents.
 
----
-
 ### Correlated Events & Scenario Detection
 
 - **"What correlated scenarios are active right now?"**
@@ -549,8 +629,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 - **"Show me the monitoring escalation level."**
   → Returns current escalation level (1–4) from `run_monitoring_check()`: INFO → WARN → ELEVATED → CRITICAL.
 
----
-
 ### Incident Replay
 
 - **"Save a snapshot of the current state."**
@@ -561,238 +639,6 @@ The ADK multi-agent system accepts natural-language queries and routes them to t
 
 - **"What happened during the handover storm incident?"**
   → Replays the incident arc captured between phases 0.65–0.80, showing the RAN agent's reasoning and actions taken.
-
----
-
-## 📊 Key Features
-
-### Executive KPI Panel
-- Subscriber Satisfaction Score (0-100%)
-- VIP QoE Score (0-100%)
-- Congestion Risk (0-100%)
-- AI Confidence (0-100%)
-- SLA Health (0-100%)
-- Revenue Protection (USD)
-- Predicted Mobility Pressure (0-100%)
-- Monitoring Escalation Level (1-4)
-
-### Live Telemetry Charts
-- **RSRP Trend**: Signal strength over time (VIP vs Standard)
-- **SINR Trend**: Signal quality with good/poor thresholds
-- **Timing Advance**: Distance from cell (mass egress indicator)
-- **PRB Utilization**: Congestion indicator with 80% threshold
-- **Handover Success Rate**: Network stability metric
-- **Congestion Heatmap**: PRB utilization matrix
-
-### Mobility Digital Twin
-- Taipei Arena marker (25.0516, 121.5500)
-- Nanjing Fuxing MRT marker (25.0528, 121.5445)
-- Subscriber dots colored by RSRP quality (green/orange/red)
-- VIP subscribers shown larger
-- Cell sector overlays (macro, small cell, DAS)
-- YouBike station marker
-
-### AI Multi-Agent Reasoning Console
-Real-time chain-of-thought display:
-```
-[RAN Intelligence]
-Signal cliff detected: RSRP drop 18dB
-Underground transition likely
-Handover storm: failure rate at 30%
-
-[Mobility Intelligence]
-Mass egress pattern confirmed
-MRT congestion rising: YELLOW → RED
-YouBike starvation: all 60 docks empty
-
-[Context Intelligence]
-Rainfall spiked to 12mm/hr
-Walking propensity reduced 40%
-Slip risk: MODERATE → HIGH
-
-[Policy Validator]
-VIP Priority Routing: APPROVED (92% confidence)
-Secondary Load Balance: BLOCKED (loop detection)
-  → Would cause neighboring cell PRB to exceed 85%
-
-[Autonomous Action]
-VIP Priority Routing Enabled
-Expected KPI improvement: +23%
-```
-
-### Autonomous Actions
-- **VIP Priority Routing**: Prioritize VIP traffic during congestion
-- **Temporary Load Balancing**: Redistribute load to neighboring cells
-- **Micro-cell Handover**: Steer to small cells for better coverage
-- **Dynamic Slice Allocation**: Adjust network slicing for VIP
-- **Small-cell Steering**: Direct to DAS for underground coverage
-
-Each action includes:
-- Confidence score (0–100%)
-- Reasoning (why this action?)
-- Expected KPI improvement (%)
-- Policy approval status (APPROVED / BLOCKED)
-
----
-
-## 🔧 Configuration
-
-Edit `.env` or `config.py`:
-
-```bash
-# LLM Configuration
-OLLAMA_API_KEY=your_key_here
-OLLAMA_API_BASE=https://ollama.com
-LLM_MODEL=ollama_chat/gemma4:31b-cloud
-
-# Simulation Parameters
-TELEMETRY_INTERVAL_MS=500        # Telemetry tick interval
-SIMULATION_DENSITY=15            # UEs per tick
-UI_REFRESH_RATE=1                # Dashboard refresh (seconds)
-
-# RAN Thresholds
-CONGESTION_THRESHOLD_PRB=80      # PRB % for congestion alert
-CONFIDENCE_THRESHOLD=85          # Min confidence for autonomous action
-MASS_EGRESS_TA_PCT=0.70          # 70% subscribers with increasing TA
-SIGNAL_CLIFF_DB=15.0             # RSRP drop threshold
-
-# Weather
-ENABLE_WEATHER=true
-WEATHER_FALLBACK_RAIN_MM_HR=0.0
-
-# Ports
-API_PORT=8400
-STREAMLIT_PORT=8500
-ADK_PORT=8080
-```
-
----
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-# Functional tests
-python -c "from streamer import _generate_batch; print('✓ Telemetry generation OK')"
-
-# Integration tests
-curl http://localhost:8400/health
-curl http://localhost:8500/_stcore/health
-
-# End-to-end test
-curl -s --max-time 3 http://localhost:8400/stream-trace | head -1
-```
-
-### Test Results
-All 16 tests pass:
-- ✅ FastAPI SSE streaming
-- ✅ Telemetry generation (60 UEs/tick)
-- ✅ RSRP degradation over time
-- ✅ VIP subscriber advantage (+3.7dBm)
-- ✅ Signal cliff detection
-- ✅ Weather service
-- ✅ Mobility service
-- ✅ Policy validation (3/4 approved)
-- ✅ KPI calculation
-- ✅ ADK tools (7/7 working)
-- ✅ Multi-agent definitions (5 agents)
-- ✅ Plotly charts (6 charts)
-- ✅ Folium map rendering
-- ✅ Streamlit dashboard
-- ✅ Policy logging
-- ✅ End-to-end integration
-
----
-
-## 📈 Performance
-
-**Optimized for MacBook Pro 2017**:
-- Async everywhere (no blocking calls)
-- Efficient batching (60 UEs/tick)
-- Configurable refresh rates
-- Chart update throttling
-- Memory-efficient history (200 records max)
-
-**Resource Usage**:
-- CPU: ~15–20% (2 cores)
-- Memory: ~300MB
-- Network: ~50KB/s (SSE stream)
-
----
-
-## 🎨 UI Design
-
-**Color Palette**:
-- Dark Navy Background: `#0A1428`
-- Cyan Telemetry Accents: `#00E5FF`
-- Green Autonomous Actions: `#00E676`
-- Orange Warnings: `#FF9100`
-- Red SLA Failures: `#FF1744`
-- Purple AI Orchestration: `#E040FB`
-
-**Design Principles**:
-- Glassmorphism cards
-- Neon telecom colors
-- Animated status indicators
-- Live logs with scrolling
-- Professional telemetry styling
-- Dark mode optimized
-
----
-
-## 📝 API Reference
-
-### FastAPI Endpoints
-
-#### `GET /`
-Returns platform information
-```json
-{
-  "platform": "CovMo Telecom Intelligence Platform",
-  "version": "1.0.0",
-  "scenario": "Taipei Arena Power Station Concert Egress",
-  "status": "operational"
-}
-```
-
-#### `GET /health`
-Health check endpoint
-```json
-{
-  "status": "healthy"
-}
-```
-
-#### `GET /stream-trace`
-Server-Sent Events stream
-
-**Response** (every 500ms):
-```json
-{
-  "tick": 1,
-  "timestamp": "2026-05-12T22:00:00",
-  "active_ues": 60,
-  "telemetry": [...],
-  "ran_alerts": [...],
-  "mobility": {...},
-  "weather": {...},
-  "correlated_events": [...],
-  "monitoring_escalation": 1,
-  "reasoning": [...],
-  "actions": [...],
-  "snapshots": {...}
-}
-```
-
----
-
-## 🔒 Security Notes
-
-- **API Keys**: Never commit `.env` to version control
-- **Logs**: Policy decisions logged to `logs/policy_decisions.log`
-- **Data**: All telemetry is synthetic (no real subscriber data)
-- **Network**: Runs on localhost by default (not exposed to internet)
 
 ---
 
@@ -833,22 +679,3 @@ This is a proprietary demo project. For questions or collaboration inquiries, pl
 **Proprietary** — CovMo™ Telecom Intelligence Platform Demo
 
 All rights reserved. This software is provided for demonstration purposes only.
-
----
-
-## 🙏 Acknowledgments
-
-Built with:
-- **Google ADK** — Multi-agent orchestration framework
-- **Anthropic Claude** — AI reasoning and code generation
-- **Ollama** — LLM inference platform
-- **Streamlit** — Rapid dashboard prototyping
-- **Plotly** — Interactive data visualization
-- **Folium** — Geospatial mapping
-
-Inspired by:
-- Groundhog Technologies CovMo
-- Ericsson OSS
-- Nokia NetAct
-- Huawei NOC
-- Palantir Foundry
