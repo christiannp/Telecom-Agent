@@ -51,13 +51,29 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 
 ### Multi-agent Design
 
-[AGENTS.md](AGENTS.md) -> system details (5 agents + ADK tools)
+The system uses 5 specialist agents coordinated by a root **Intent Orchestration Agent** via Google ADK:
+
+- **RAN Agent** — Radio telemetry analysis: RSRP, SINR, PRB, CQI, handover failure prediction, signal cliff & anomaly burst detection
+- **Mobility Agent** — Crowd dynamics: MRT congestion (GREEN/YELLOW/RED), YouBike availability, egress velocity, slip risk
+- **Context Agent** — Environmental awareness: Taiwan CWA weather integration, walking propensity, rainfall impact on mobility
+- **Policy Agent** — Autonomous governance: validates all actions (≥85% confidence, ≥10% KPI improvement), VIP SLA enforcement, loop detection
+- **Intent Orchestrator** — Routes user queries to the right agent(s), explains AI reasoning with confidence scores
+
+See [AGENTS.md](AGENTS.md) for full details.
 
 ---
 
 ## Dashboard UI
 
-[DASHBOARD.md](DASHBOARD.md) -> Dashboard features, charts, maps, autonomous actions
+The dashboard combines real-time telemetry, mobility visualization, and autonomous action control in a single Streamlit interface:
+
+- **Executive KPI Panel** — 8 live metrics: Subscriber Satisfaction, VIP QoE, Congestion Risk, AI Confidence, SLA Health, Revenue Protection, Mobility Pressure, and Escalation Level (1–4)
+- **Live Telemetry Charts** — RSRP/SINR/PRB trends, Timing Advance mass-egress indicator, handover success rate, and PRB congestion heatmap
+- **Mobility Digital Twin** — Folium map with Taipei Arena + MRT markers, subscriber dots (color-coded by signal quality, VIPs enlarged), cell sector overlays, and YouBike station
+- **AI Reasoning Console** — Real-time chain-of-thought display per agent with confidence scores and policy decisions
+- **Autonomous Actions** — Manually trigger or review approved/blocked actions (VIP Priority Routing, Load Balancing, Micro-cell Handover, etc.) with reasoning and expected KPI impact
+
+See [DASHBOARD.md](DASHBOARD.md) for full details.
 
 ---
 
@@ -105,7 +121,7 @@ See [SCENARIO.md](SCENARIO.md) for full timeline and trigger details.
 
 ## Demo Questions
 
-Users interact with the multi-agent system via natural language — queries are routed to the appropriate specialist agent (RAN, Mobility, Context, or Policy) and resolved autonomously. Example queries include:
+Users interact with the multi-agent system via natural language — queries are routed to the appropriate specialist agent (RAN, Mobility, Context, or Policy) and resolved autonomously. All autonomous actions require ≥85% confidence and ≥10% expected improvement before Policy agent approval. Example queries include:
 
 | Domain | Example Questions |
 |--------|-------------------|
@@ -115,8 +131,6 @@ Users interact with the multi-agent system via natural language — queries are 
 | **Context** | *"How is weather affecting subscriber behavior?"*, *"Calculate walking propensity"* |
 | **Policy** | *"Should I enable VIP Priority Routing now?"*, *"Would load balancing cause secondary congestion?"* |
 | **VIP Analytics** | *"Show top 10 VIP subscribers by QoE degradation"*, *"Predict SLA breach in the next 5 minutes"* |
-
-All autonomous actions require ≥85% confidence and ≥10% expected improvement before Policy agent approval.
 
 See [USER_GUIDE.md](USER_GUIDE.md) for the full question library.
 
