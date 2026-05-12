@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 5 http://localhost:8000/stream-trace)",
+      "Bash(../venv/bin/python -m streamlit run streamlit_app.py --server.port 8501 --server.headless true --browser.gatherUsageStats false)",
+      "Bash(curl -s --max-time 5 http://localhost:8501/_stcore/health)",
+      "Bash(curl -s --max-time 3 http://localhost:8501/)",
+      "Bash(gh auth *)",
+      "Bash(curl -s \"https://api.github.com/repos/christiannp/Telecom-Agent\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Repo: {d[\\\\\"full_name\\\\\"]}\\\\nDefault branch: {d[\\\\\"default_branch\\\\\"]}\\\\nDescription: {d[\\\\\"description\\\\\"]}\\\\nURL: {d[\\\\\"html_url\\\\\"]}'\\)\")",
+      "WebFetch(domain:github.com)",
+      "Bash(../venv/bin/adk --help)",
+      "Bash(../venv/bin/adk web *)",
+      "Bash(xargs kill -9)",
+      "Bash(kill -9 20583 24420)",
+      "Bash(curl -s --max-time 3 http://localhost:8400/)",
+      "Bash(curl -s --max-time 3 http://localhost:8500/_stcore/health)",
+      "Bash(curl -s --max-time 3 http://localhost:8080/)",
+      "Bash(curl -s http://localhost:8400/health)",
+      "Bash(curl -s --max-time 2 http://localhost:8400/stream-trace)",
+      "Bash(python3 -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\).replace\\('data: ',''\\)\\); print\\(f'Tick: {d[\\\\\"tick\\\\\"]}, UEs: {d[\\\\\"active_ues\\\\\"]}, Weather: {d[\\\\\"weather\\\\\"][\\\\\"rainfall_mm_hr\\\\\"]}mm/hr'\\)\")",
+      "Bash(curl -s http://localhost:8501/)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(curl -s --max-time 3 -L http://localhost:8080/)",
+      "Bash(curl -s --max-time 3 http://localhost:8080/web/)"
+    ]
+  }
+}
