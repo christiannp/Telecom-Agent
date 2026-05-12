@@ -397,6 +397,242 @@ def congestion_gauge(level: str, pct: float) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+# ── Correlated Event Card ─────────────────────────────────────────────────────
+def correlated_event_card(event: dict) -> None:
+    """Render a correlated scenario event card with severity color coding."""
+    sev_colors = {
+        "GREEN": COLORS["green"],
+        "YELLOW": COLORS["yellow"],
+        "ORANGE": COLORS["orange"],
+        "RED": COLORS["red"],
+        "PURPLE": COLORS["purple"],
+    }
+    color = sev_colors.get(event.get("severity", "CYAN").upper(), COLORS["cyan"])
+    scenario = event.get("scenario_label", event.get("event_type", "UNKNOWN"))
+    confidence = event.get("confidence", 0)
+    consequence = event.get("inferred_consequence", "")
+    action = event.get("recommended_autonomous_action", "—")
+    signals = event.get("signal_correlation", {})
+
+    # Build signals display
+    signals_lines = ""
+    for key, val in list(signals.items())[:4]:
+        signals_lines += f'<div style="color:{COLORS["grey"]}; font-size:10px;">  {key}: <span style="color:#E0E0E0;">{val}</span></div>'
+
+    html = f"""
+    <style>
+    .evt-card-{scenario[:12].lower()} {{
+        background: {color}08;
+        border: 1px solid {color}50;
+        border-left: 4px solid {color};
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 4px 0;
+        font-family: 'Courier New', monospace;
+    }}
+    .evt-header {{
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 4px;
+    }}
+    .evt-scenario {{
+        color: {color}; font-size: 12px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }}
+    .evt-confidence {{
+        color: {COLORS["grey"]}; font-size: 10px;
+    }}
+    .evt-consequence {{
+        color: #E0E0E0; font-size: 11px; line-height: 1.4; margin: 4px 0;
+    }}
+    .evt-action {{
+        color: {COLORS["cyan"]}; font-size: 11px; font-weight: 600;
+        margin-top: 4px;
+    }}
+    .evt-action-badge {{
+        display: inline-block;
+        background: {color}25;
+        border: 1px solid {color}60;
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 10px;
+        text-transform: uppercase;
+    }}
+    .evt-signals {{
+        margin-top: 4px; padding-top: 4px;
+        border-top: 1px solid {COLORS["border"]};
+    }}
+    </style>
+    <div class="evt-card-{scenario[:12].lower()}">
+        <div class="evt-header">
+            <span class="evt-scenario">★ {scenario}</span>
+            <span class="evt-confidence">Conf: {confidence:.0f}%</span>
+        </div>
+        <div class="evt-consequence">{consequence}</div>
+        <div class="evt-action">
+            Action: <span class="evt-action-badge">{action}</span>
+        </div>
+        <div class="evt-signals">
+            <div style="color:{COLORS["grey"]}; font-size:9px; margin-bottom:2px;">SIGNALS:</div>
+            {signals_lines}
+        </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# ── Monitoring Escalation Panel ────────────────────────────────────────────────
+def monitoring_escalation_panel(escalations: dict) -> None:
+    """Render the continuous monitoring loop status for all active agents."""
+    if not escalations:
+        st.caption("No active monitoring loops — agents in standby.")
+        return
+
+    levels = ["NOMINAL", "WATCH", "WARNING", "CRITICAL"]
+    level_colors = [COLORS["green"], COLORS["yellow"], COLORS["orange"], COLORS["red"]]
+
+    cols = st.columns(len(escalations))
+    for col, (agent_name, state) in zip(cols, escalations.items()):
+        level = state.get("escalation_level", 0)
+        label = levels[min(level, 3)]
+        color = level_colors[min(level, 3)]
+        alert_type = state.get("last_alert_type", "—")
+        alert_count = state.get("alert_count", 0)
+        consec = state.get("consecutive_checks", 0)
+
+        # Agent display name
+        display_name = agent_name.replace("_intelligence_agent", "").replace("_validation_agent", " Validation")
+        display_name = display_name.replace("_", " ").title()
+
+        with col:
+            st.markdown(f"""
+            <style>
+            .mon-panel-{agent_name[:8]} {{
+                background: {color}10;
+                border: 1px solid {color}50;
+                border-radius: 8px;
+                padding: 10px;
+                text-align: center;
+                font-family: 'Courier New', monospace;
+            }}
+            .mon-agent {{
+                color: {color}; font-size: 11px; font-weight: 700;
+                text-transform: uppercase; letter-spacing: 0.5px;
+                margin-bottom: 4px;
+            }}
+            .mon-level {{
+                color: {color}; font-size: 18px; font-weight: 700;
+                margin: 4px 0;
+            }}
+            .mon-detail {{
+                color: {COLORS["grey"]}; font-size: 10px;
+            }}
+            </style>
+            <div class="mon-panel-{agent_name[:8]}">
+                <div class="mon-agent">{'📡' if 'ran' in agent_name else '🚇' if 'mobility' in agent_name else '🌤' if 'context' in agent_name else '⚖️'} {display_name}</div>
+                <div class="mon-level">{label}</div>
+                <div class="mon-detail">Alert: {alert_type}</div>
+                <div class="mon-detail">Count: {alert_count} | Consecutive: {consec}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+# ── Incident Replay Controls ───────────────────────────────────────────────────
+def replay_controls():
+    """Render incident replay controls in the sidebar."""
+    st.markdown("### 🎬 Incident Replay")
+    from services.telemetry_service import get_replay_snapshots, get_replay_controller
+    from services import set_replay_controller as _set_ctrl
+
+    snapshots = get_replay_snapshots()
+    if not snapshots:
+        st.caption("No replay snapshots yet.")
+        return
+
+    controller = get_replay_controller()
+    status = controller.get("status", "stopped")
+    speed = controller.get("speed", 1.0)
+    cur_tick = controller.get("current_tick", 0)
+
+    # Snapshot list
+    st.caption(f"📸 {len(snapshots)} snapshots saved")
+
+    tick_min = min(s["tick"] for s in snapshots)
+    tick_max = max(s["tick"] for s in snapshots)
+
+    seek_tick = st.slider(
+        "Seek to tick",
+        min_value=int(tick_min),
+        max_value=int(tick_max),
+        value=int(cur_tick or tick_min),
+        step=1,
+        key="replay_seek",
+    )
+
+    c1, c2 = st.columns(2)
+    play_disabled = status == "playing"
+    stop_disabled = status == "stopped"
+
+    if c1.button("▶ Play", use_container_width=True, disabled=play_disabled):
+        _set_ctrl(status="playing", current_tick=seek_tick)
+        st.rerun()
+    if c2.button("⏸ Pause", use_container_width=True, disabled=stop_disabled):
+        _set_ctrl(status="paused")
+        st.rerun()
+
+    speed_map = {"0.5x": 0.5, "1x": 1.0, "2x": 2.0, "5x": 5.0, "10x": 10.0}
+    speed_labels = list(speed_map.keys())
+    cur_speed_label = next((k for k, v in speed_map.items() if v == speed), "1x")
+    speed_idx = speed_labels.index(cur_speed_label) if cur_speed_label in speed_labels else 1
+
+    speed_choice = st.selectbox(
+        "Playback speed", speed_labels,
+        index=speed_idx, key="replay_speed",
+    )
+    if speed_choice:
+        _set_ctrl(speed=speed_map[speed_choice])
+        st.rerun()
+
+
+# ── Incident Arc Timeline ─────────────────────────────────────────────────────
+def incident_arc_timeline(arcs: dict) -> None:
+    """Render active incident arcs in a compact timeline."""
+    if not arcs:
+        return
+
+    cols = st.columns(len(arcs))
+    for col, (arc_name, active) in zip(cols, arcs.items()):
+        display = arc_name.replace("_", " ").title()
+        # Color based on arc type
+        color = COLORS["red"]
+        if "weather" in arc_name:
+            color = COLORS["purple"]
+        elif "handover" in arc_name:
+            color = COLORS["orange"]
+        elif "vip" in arc_name:
+            color = COLORS["red"]
+        elif "overload" in arc_name or "congestion" in arc_name:
+            color = COLORS["orange"]
+        elif "anomaly" in arc_name:
+            color = COLORS["yellow"]
+        elif "youbike" in arc_name:
+            color = COLORS["green"]
+
+        with col:
+            st.markdown(f"""
+            <div style="
+                background: {color}15;
+                border: 1px solid {color}60;
+                border-left: 3px solid {color};
+                border-radius: 6px;
+                padding: 6px 10px;
+                text-align: center;
+                font-family: 'Courier New', monospace;
+                font-size: 11px;
+                color: {color};
+            ">● {display}</div>
+            """, unsafe_allow_html=True)
+
+
 # ── Live Log Streamer ─────────────────────────────────────────────────────────
 def live_log_display(log_lines: list[str]) -> None:
     """Render a scrolling live log display."""

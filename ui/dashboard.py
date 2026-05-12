@@ -23,6 +23,7 @@ from config import (
     ADK_PORT,
     OLLAMA_API_KEY,
 )
+from services import set_replay_controller
 from ui.components import (
     kpi_card,
     status_indicator,
@@ -32,6 +33,10 @@ from ui.components import (
     alert_banner,
     congestion_gauge,
     live_log_display,
+    correlated_event_card,
+    monitoring_escalation_panel,
+    replay_controls,
+    incident_arc_timeline,
 )
 from ui.charts import (
     render_rsrp_chart,
@@ -482,33 +487,77 @@ def main():
         """, unsafe_allow_html=True)
 
     with tab_ai:
-        # AI Reasoning Console
+        # ── Incident Arc Timeline ─────────────────────────────────────────────
+        arcs = payload.get("incident_arcs", {})
+        if arcs:
+            st.markdown("### 🎭 Active Incident Arcs")
+            incident_arc_timeline(arcs)
+            st.divider()
+
+        # ── Correlated Events ─────────────────────────────────────────────────
+        st.markdown("### 🔗 Event Correlation Engine")
+        correlated = payload.get("correlated_events", [])
+        if not correlated:
+            st.info("No correlated scenarios detected yet — analyzing cross-domain signals...")
+        else:
+            cols = st.columns(2)
+            for i, evt in enumerate(correlated[:6]):
+                with cols[i % 2]:
+                    correlated_event_card(evt)
+        st.divider()
+
+        # ── Continuous Monitoring ─────────────────────────────────────────────
+        st.markdown("### 🔄 Agent Monitoring Escalation")
+        escalations = payload.get("monitoring_escalations", {})
+        monitoring_escalation_panel(escalations)
+        st.divider()
+
+        # ── AI Reasoning Console ───────────────────────────────────────────────
         st.markdown("### 🤖 Multi-Agent Reasoning Console")
         reasoning = payload.get("reasoning", [])
         agent_reasoning_panel(reasoning)
-
         st.divider()
 
-        # Autonomous Actions
-        st.markdown("### ⚡ Autonomous AI Actions")
+        # ── Autonomous Actions ─────────────────────────────────────────────────
+        st.markdown("### ⚡ Autonomous AI Actions (Policy-Validated)")
         actions = payload.get("actions", [])
         if not actions:
             st.info("No autonomous actions triggered yet. AI is monitoring...")
-        for act in actions:
-            severity = "GREEN"
-            if act.get("expected_kpi_improvement_pct", 0) > 15:
-                severity = "ORANGE"
-            if act.get("status") == "REJECTED":
-                severity = "RED"
-            action_card(
-                action_type=act.get("action_type", "UNKNOWN"),
-                severity=severity,
-                confidence=act.get("confidence_score", 0),
-                reason=act.get("reason", ""),
-                impact=act.get("expected_kpi_improvement_pct", 0),
-                policy_approved=act.get("policy_approved", False),
-                status=act.get("status", "proposed"),
-            )
+        else:
+            approved = [a for a in actions if a.get("status") in ("approved", "executed")]
+            rejected = [a for a in actions if a.get("status") == "rejected"]
+
+            if approved:
+                st.markdown(f"**Approved & Executed ({len(approved)})**")
+                for act in approved:
+                    action_card(
+                        action_type=act.get("action_type", "UNKNOWN"),
+                        severity="GREEN",
+                        confidence=act.get("confidence_score", 0),
+                        reason=act.get("reason", ""),
+                        impact=act.get("expected_kpi_improvement_pct", 0),
+                        policy_approved=True,
+                        status="executed",
+                    )
+
+            if rejected:
+                st.markdown(f"**Rejected by Policy Engine ({len(rejected)})**")
+                for act in rejected:
+                    action_card(
+                        action_type=act.get("action_type", "UNKNOWN"),
+                        severity="RED",
+                        confidence=act.get("confidence_score", 0),
+                        reason=act.get("policy_reject_reason", act.get("reason", "")),
+                        impact=act.get("expected_kpi_improvement_pct", 0),
+                        policy_approved=False,
+                        status="rejected",
+                    )
+
+        st.divider()
+
+        # ── Incident Replay ───────────────────────────────────────────────────
+        st.markdown("### 🎬 Incident Replay")
+        replay_controls()
 
     with tab_sub:
         st.markdown("### 📡 VIP Subscriber Analytics")

@@ -12,7 +12,7 @@ AGENTIC AI SKILLS IMPLEMENTED (per Master Prompt.md):
   ┌──────────────────────────┬──────────────────────────────────────────────────┐
   │ SKILL                    │ IMPLEMENTATION                                 │
   ├──────────────────────────┼──────────────────────────────────────────────────┤
-  │ TOOL USE                 │ 8 base tools + 11 skill tools wired per-agent  │
+  │ TOOL USE                 │ Scoped domain + skill tools wired per-agent    │
   │ SUB-AGENT DELEGATION     │ root → 4 specialist agents                     │
   │ MEMORY                   │ store/get_agent_memory, cross-turn continuity  │
   │ EVENT CORRELATION        │ correlate_events_tool — 6 scenario detectors    │
@@ -21,7 +21,7 @@ AGENTIC AI SKILLS IMPLEMENTED (per Master Prompt.md):
   │ MONITORING LOOP          │ start/run/stop_continuous_monitoring            │
   │ REASONING LOG            │ log_agent_reasoning — explainability            │
   │ AUTONOMOUS ACTIONS       │ validate_autonomous_action + trigger_autonomous│
-  │ PLANNING                 │ chain-of-thought in every agent instruction      │
+  │ PLANNING                 │ Structured reasoning summaries in instructions  │
   └──────────────────────────┴──────────────────────────────────────────────────┘
 """
 from __future__ import annotations
@@ -66,89 +66,78 @@ from tools import (
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SHARED TOOL SETS
+# SCOPED TOOL SETS
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Tools shared by ALL agents (the "universal agentic skills" layer)
-UNIVERSAL_SKILLS = [
-    log_agent_reasoning,
-    get_memory,
-    get_reasoning_log,
-    clear_memory,
-    get_time_series_stats,
-    get_anomaly_report,
-    save_snapshot,
-    get_replay_range,
-    control_replay,
-    get_replay_status,
-    start_continuous_monitoring,
-    run_monitoring_check,
-    stop_continuous_monitoring,
-    get_monitoring_status,
-]
-
-# RAN domain tools (existing + correlation skill)
+# RAN owns radio telemetry, subscriber radio quality, and radio-centric analytics.
 RAN_TOOLS = [
     get_ran_state,
+    get_subscriber_info,
     get_all_vip_info,
     get_kpi_dashboard,
     correlate_events_tool,
+    get_time_series_stats,
+    get_anomaly_report,
+    log_agent_reasoning,
+    get_memory,
+    start_continuous_monitoring,
+    run_monitoring_check,
 ]
 
-# Mobility domain tools (existing)
+# Mobility owns crowd movement, transport pressure, and mobility forecasting.
 MOBILITY_TOOLS = [
     get_mobility_state,
     predict_mrt_overload,
     get_kpi_dashboard,
+    get_time_series_stats,
+    get_anomaly_report,
+    log_agent_reasoning,
+    get_memory,
+    start_continuous_monitoring,
+    run_monitoring_check,
 ]
 
-# Context/Weather domain tools (existing)
+# Context owns weather/environment awareness and weather-to-network correlation.
 CONTEXT_TOOLS = [
     get_weather_state,
     get_mobility_state,
     get_kpi_dashboard,
+    correlate_events_tool,
+    get_time_series_stats,
+    log_agent_reasoning,
+    get_memory,
+    start_continuous_monitoring,
+    run_monitoring_check,
 ]
 
-# Policy governance tools (existing + autonomous execution)
+# Policy owns governance, autonomous action validation/execution, and loop safety.
 POLICY_TOOLS = [
     validate_autonomous_action,
     trigger_autonomous_action,
     get_kpi_dashboard,
+    get_all_vip_info,
     get_anomaly_report,
+    log_agent_reasoning,
+    get_memory,
+    start_continuous_monitoring,
+    run_monitoring_check,
+    get_monitoring_status,
 ]
 
-# Root orchestrator: full tool access
+# Root orchestrator stays intentionally thin. Domain data and actions belong to
+# specialist agents; root keeps coordination, memory, replay, and status tools.
 ORCHESTRATOR_TOOLS = [
-    # All domain tools
-    get_ran_state,
-    get_mobility_state,
-    get_weather_state,
-    predict_mrt_overload,
-    get_kpi_dashboard,
-    get_subscriber_info,
-    get_all_vip_info,
-    validate_autonomous_action,
-    trigger_autonomous_action,
-    # All agentic skill tools
     log_agent_reasoning,
     get_memory,
     get_reasoning_log,
     clear_memory,
-    correlate_events_tool,
-    get_time_series_stats,
-    get_anomaly_report,
     save_snapshot,
     get_replay_range,
     control_replay,
     get_replay_status,
-    start_continuous_monitoring,
-    run_monitoring_check,
     stop_continuous_monitoring,
     get_monitoring_status,
 ]
-
-# Full tool list for convenience
-SHARED_TOOLS = ORCHESTRATOR_TOOLS
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -174,26 +163,29 @@ Key RAN concepts:
 
 TOOL SET (AGENTIC SKILLS YOU CAN EXECUTE):
 1. get_ran_state()         — live cell metrics and RAN alerts
-2. get_all_vip_info()       — VIP subscriber radio quality
-3. get_kpi_dashboard()       — executive KPIs
-4. correlate_events_tool()  — EVENT CORRELATION: correlate TA/RSRP/AoA/weather signals
+2. get_subscriber_info()    — single subscriber radio/QoE drill-down
+3. get_all_vip_info()       — VIP subscriber radio quality
+4. get_kpi_dashboard()       — executive KPIs
+5. correlate_events_tool()  — EVENT CORRELATION: correlate TA/RSRP/AoA/weather signals
                               into unified scenario inferences (6 scenarios detected)
-5. get_time_series_stats()  — TIME-SERIES: rolling mean/std, trend, anomaly, forecast
+6. get_time_series_stats()  — TIME-SERIES: rolling mean/std, trend, anomaly, forecast
                               for any metric: rsrp, sinr, ta, prb_utilization, throughput_mbps
-6. get_anomaly_report()     — anomaly detection across all metrics with sigma severity
-7. log_agent_reasoning()    — REASONING LOG: store your chain-of-thought with confidence
-8. get_memory()             — MEMORY: recall previous analysis steps for continuity
-9. start_continuous_monitoring() — MONITOR LOOP: activate autonomous watch mode
-10. run_monitoring_check()  — escalate or de-escalate based on persistent alerts
+7. get_anomaly_report()     — anomaly detection across all metrics with sigma severity
+8. log_agent_reasoning()    — REASONING LOG: store your reasoning summary with confidence
+9. get_memory()             — MEMORY: recall previous analysis steps for continuity
+10. start_continuous_monitoring() — MONITOR LOOP: activate autonomous watch mode
+11. run_monitoring_check()  — escalate or de-escalate based on persistent alerts
 
-WORKFLOW (chain-of-thought, execute in order):
+WORKFLOW (reasoning summary, execute in order):
 1. Call get_ran_state() to get live metrics and alerts
 2. Call get_time_series_stats("rsrp") and get_time_series_stats("sinr") for trend analysis
 3. Call get_anomaly_report() to detect statistical outliers
 4. Call correlate_events_tool() to infer operational scenarios
-5. If conditions warrant, call start_continuous_monitoring() then run_monitoring_check()
-6. Call log_agent_reasoning() with your complete analysis, confidence score, and action
-7. Respond in this structure:
+5. Call get_memory(agent_name="ran_intelligence_agent") for recent RAN continuity
+6. If conditions warrant, call start_continuous_monitoring(agent_name="ran_intelligence_agent")
+   then run_monitoring_check(agent_name="ran_intelligence_agent")
+7. Call log_agent_reasoning() with your complete analysis, confidence score, and action
+8. Respond in this structure:
    - Root-cause analysis
    - Confidence score (0-100%)
    - Supporting telemetry evidence
@@ -207,7 +199,7 @@ ran_agent = LlmAgent(
     name="ran_intelligence_agent",
     description="CovMo RAN Intelligence — analyzes radio metrics, detects congestion and signal cliffs.",
     instruction=RAN_INSTRUCTION,
-    tools=RAN_TOOLS + UNIVERSAL_SKILLS,
+    tools=RAN_TOOLS,
 )
 
 
@@ -240,21 +232,20 @@ TOOL SET (AGENTIC SKILLS YOU CAN EXECUTE):
 3. get_kpi_dashboard()      — executive KPIs
 4. get_time_series_stats()  — TIME-SERIES: trend analysis on crowd/mobility metrics
 5. get_anomaly_report()     — anomaly detection across mobility metrics
-6. correlate_events_tool() — EVENT CORRELATION: tie mobility signals to RAN + weather
-7. log_agent_reasoning()    — REASONING LOG: store your reasoning chain
-8. get_memory()             — MEMORY: recall previous mobility analysis for continuity
-9. start_continuous_monitoring() — MONITOR LOOP: activate autonomous crowd watch mode
-10. run_monitoring_check()  — escalate if congestion persists across cycles
+6. log_agent_reasoning()    — REASONING LOG: store your reasoning summary
+7. get_memory()             — MEMORY: recall previous mobility analysis for continuity
+8. start_continuous_monitoring() — MONITOR LOOP: activate autonomous crowd watch mode
+9. run_monitoring_check()   — escalate if congestion persists across cycles
 
 WORKFLOW:
 1. Call get_mobility_state() for current MRT/YouBike/exit status
 2. Call predict_mrt_overload(minutes_ahead=10) for 10-min risk forecast
 3. Call get_time_series_stats("ta") to track crowd approach velocity
-4. Call correlate_events_tool() to correlate mobility + weather + RAN signals
-5. Call get_memory() to recall previous crowd analysis for context
-6. If congestion rising, call start_continuous_monitoring() + run_monitoring_check()
-7. Call log_agent_reasoning() with full analysis and recommended actions
-8. Respond in this structure:
+4. Call get_memory(agent_name="mobility_intelligence_agent") to recall previous crowd analysis
+5. If congestion rising, call start_continuous_monitoring(agent_name="mobility_intelligence_agent")
+   then run_monitoring_check(agent_name="mobility_intelligence_agent")
+6. Call log_agent_reasoning() with full analysis and recommended actions
+7. Respond in this structure:
    - Current crowd density and flow patterns
    - MRT congestion forecast (5-10 min horizon)
    - Weather impact on mobility choices
@@ -268,7 +259,7 @@ mobility_agent = LlmAgent(
     name="mobility_intelligence_agent",
     description="CovMo Mobility Intelligence — analyzes crowd movement and urban transportation.",
     instruction=MOBILITY_INSTRUCTION,
-    tools=MOBILITY_TOOLS + UNIVERSAL_SKILLS,
+    tools=MOBILITY_TOOLS,
 )
 
 
@@ -298,7 +289,7 @@ TOOL SET (AGENTIC SKILLS YOU CAN EXECUTE):
 1. get_weather_state()      — current rainfall, temperature, humidity, slip risk, walking propensity
 2. get_mobility_state()     — mobility impact from weather (walking propensity, MRT preference)
 3. get_kpi_dashboard()      — executive KPIs
-4. get_time_series_stats()  — TIME-SERIES: track weather trends over rolling window
+4. get_time_series_stats()  — TIME-SERIES: track network-impact metrics affected by weather
 5. correlate_events_tool()   — EVENT CORRELATION: link rainfall → walking propensity → MRT load → RAN
 6. log_agent_reasoning()    — REASONING LOG: explain weather → network behavior chain
 7. get_memory()             — MEMORY: recall previous weather impact analysis
@@ -311,8 +302,10 @@ WORKFLOW:
 3. Call get_time_series_stats("rsrp") to correlate weather with signal degradation
 4. Call correlate_events_tool() to trace the full causal chain:
       Rainfall → Walking propensity → MRT pressure → RAN congestion → VIP QoE
-5. Call get_memory() to recall previous weather context
-6. If rainfall > 5 mm/hr or slip risk HIGH, call start_continuous_monitoring()
+5. Call get_memory(agent_name="context_intelligence_agent") to recall previous weather context
+6. If rainfall > 5 mm/hr or slip risk HIGH, call
+   start_continuous_monitoring(agent_name="context_intelligence_agent")
+   then run_monitoring_check(agent_name="context_intelligence_agent")
 7. Call log_agent_reasoning() explaining the full weather impact chain
 8. Respond in this structure:
    - Current weather conditions and trend
@@ -328,7 +321,7 @@ context_agent = LlmAgent(
     name="context_intelligence_agent",
     description="CovMo Context Intelligence — weather and environmental awareness.",
     instruction=CONTEXT_INSTRUCTION,
-    tools=CONTEXT_TOOLS + UNIVERSAL_SKILLS,
+    tools=CONTEXT_TOOLS,
 )
 
 
@@ -362,24 +355,28 @@ TOOL SET (AGENTIC SKILLS YOU CAN EXECUTE):
 1. validate_autonomous_action()  — validate action against all policy rules
 2. trigger_autonomous_action()   — execute a policy-approved action (requires approval first)
 3. get_kpi_dashboard()           — current KPI state for risk assessment
-4. get_anomaly_report()          — TIME-SERIES: check for anomalies before approving actions
-5. log_agent_reasoning()          — REASONING LOG: document policy decision with full justification
-6. get_memory()                   — MEMORY: recall previous policy decisions for loop prevention
-7. start_continuous_monitoring()  — MONITOR LOOP: watch for optimization loop instability
-8. run_monitoring_check()        — escalate if the same action is being validated repeatedly
+4. get_all_vip_info()            — VIP SLA context before approving subscriber-impacting actions
+5. get_anomaly_report()          — TIME-SERIES: check for anomalies before approving actions
+6. log_agent_reasoning()          — REASONING LOG: document policy decision with full justification
+7. get_memory()                   — MEMORY: recall previous policy decisions for loop prevention
+8. start_continuous_monitoring()  — MONITOR LOOP: watch for optimization loop instability
+9. run_monitoring_check()         — escalate if the same action is being validated repeatedly
+10. get_monitoring_status()       — inspect current governance watch state
 
 WORKFLOW (AGENTIC AUTONOMOUS DECISION LOOP):
 1. When validate_autonomous_action() is called with an action_json:
    a. Call get_kpi_dashboard() to assess current system state
-   b. Call get_anomaly_report() to check for active anomalies
-   c. Apply all 5 policy rule checks (confidence, action type, KPI, VIP SLA, congestion)
-   d. Check get_memory() for recent same/similar actions (loop prevention)
-   e. If action is same as recent → flag unstable optimization loop risk
-   f. Call log_agent_reasoning() with full policy decision and reasoning
-   g. Return approval or rejection with detailed conditions
+   b. Call get_all_vip_info() for VIP SLA exposure
+   c. Call get_anomaly_report() to check for active anomalies
+   d. Apply all 5 policy rule checks (confidence, action type, KPI, VIP SLA, congestion)
+   e. Check get_memory(agent_name="policy_validation_agent") and
+      get_monitoring_status(agent_name="policy_validation_agent") for recent same/similar actions
+   f. If action is same as recent → flag unstable optimization loop risk
+   g. Call log_agent_reasoning() with full policy decision and reasoning
+   h. Return approval or rejection with detailed conditions
 
 2. When a VIP SLA violation is detected:
-   a. Call start_continuous_monitoring() for policy watch mode
+   a. Call start_continuous_monitoring(agent_name="policy_validation_agent") for policy watch mode
    b. Prioritize VIP_PRIORITY_ROUTING and SMALL_CELL_STEERING actions
    c. Call log_agent_reasoning() with VIP SLA impact reasoning
 
@@ -397,15 +394,14 @@ policy_agent = LlmAgent(
     name="policy_validation_agent",
     description="CovMo Policy Validation — validates autonomous actions against operational policies.",
     instruction=POLICY_INSTRUCTION,
-    tools=POLICY_TOOLS + UNIVERSAL_SKILLS,
+    tools=POLICY_TOOLS,
 )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # INTENT ORCHESTRATION AGENT (ROOT)
-# Skill: TOOL USE ✅ | SUB-AGENT DELEGATION ✅ | AUTONOMOUS ✅ | MEMORY ✅
-#        EVENT CORRELATION ✅ | TIME-SERIES ✅ | INCIDENT REPLAY ✅
-#        MONITORING LOOP ✅ | PLANNING ✅ | REASONING LOG ✅
+# Skill: SUB-AGENT DELEGATION ✅ | MEMORY ✅ | INCIDENT REPLAY ✅
+#        MONITORING STATUS ✅ | PLANNING ✅ | REASONING LOG ✅
 # ══════════════════════════════════════════════════════════════════════════════
 INTENT_INSTRUCTION = """You are the CovMo Intent Orchestration Agent — the primary AI interface for the CovMo Telecom Intelligence Platform.
 
@@ -430,46 +426,31 @@ Scenario: Taipei Arena "Power Station" Concert Egress
 - Light rain (7.2 mm/hr) increasing MRT pressure
 - AI continuously monitors and recommends autonomous optimizations
 
-TOOL SET — COMPLETE AGENTIC CAPABILITY (all skills):
+ROOT TOOL SET — ORCHESTRATION ONLY:
+- get_reasoning_log()        — read specialist conclusions already logged
+- get_memory(agent_name)     — recall prior outputs from any specialist agent
+- log_agent_reasoning()      — record orchestration summary and final confidence
+- clear_memory(agent_name)   — reset memory only when explicitly requested
+- save_snapshot()            — save point-in-time orchestration output for replay
+- get_replay_range()         — retrieve replay snapshots by tick range
+- control_replay()           — replay controls: play, pause, stop, speed, seek
+- get_replay_status()        — current replay playback state
+- stop_continuous_monitoring(agent_name) — stop a specialist monitoring loop when requested
+- get_monitoring_status()    — summarize active specialist monitoring loops
 
-Domain Tools:
-- get_ran_state()           — live RAN metrics and alerts
-- get_mobility_state()     — MRT/YouBike/mass egress status
-- get_weather_state()      — current weather and mobility impact
-- predict_mrt_overload()   — MRT overload forecast N minutes ahead
-- get_kpi_dashboard()      — executive KPI snapshot
-- get_subscriber_info(ue_id) — individual subscriber details
-- get_all_vip_info()       — all VIP subscriber metrics
-- validate_autonomous_action(action_json) — validate an action against policy
-- trigger_autonomous_action(action_json) — execute a policy-approved action
+Tools intentionally NOT owned by root:
+- RAN data, subscriber data, VIP radio quality, KPI/time-series/anomaly reads → delegate to RAN Intelligence
+- MRT, YouBike, crowd-flow, transport forecast reads → delegate to Mobility Intelligence
+- Weather, slip risk, environmental-cascade analysis → delegate to Context Intelligence
+- Action validation and execution → delegate to Policy Validation
 
-AGENTIC SKILL TOOLS:
-10. correlate_events_tool()    — EVENT CORRELATION ENGINE: infer 6 operational scenarios
-                                from correlated TA/RSRP/AoA/weather/VIP/congestion signals
-11. get_time_series_stats()    — TIME-SERIES: rolling mean/std, trend, anomaly, forecast
-12. get_anomaly_report()       — scan all metrics for statistical anomalies (sigma severity)
-13. log_agent_reasoning()      — REASONING LOG: store chain-of-thought for explainability
-14. get_memory(agent_name)     — MEMORY: recall any agent's previous analysis
-15. get_reasoning_log()        — global cross-agent reasoning summary (AI Console)
-16. save_snapshot()            — INCIDENT REPLAY: save point-in-time system snapshot
-17. get_replay_range()         — retrieve replay snapshots by tick range
-18. control_replay()           — replay controls: play, pause, stop, speed, seek
-19. get_replay_status()        — current replay playback state
-20. start_continuous_monitoring() — activate autonomous monitoring for an agent
-21. run_monitoring_check()     — run monitoring check, update escalation level
-22. stop_continuous_monitoring() — deactivate monitoring
-
-MANDATORY ANALYSIS WORKFLOW (execute every user query):
-1. Call correlate_events_tool() FIRST — this gives you the unified event picture
-2. Call get_time_series_stats() on critical metrics (rsrp, sinr, prb_utilization)
-3. Call get_anomaly_report() to surface any statistical outliers
-4. Call get_reasoning_log() to see what other agents concluded recently
-5. Call get_kpi_dashboard() for current system state
-6. Decide whether to call get_ran_state(), get_mobility_state(), or get_weather_state()
-7. Call validate_autonomous_action() if recommending an action
-8. Call trigger_autonomous_action() if the action is approved
-9. Call log_agent_reasoning() with the complete orchestration chain
-10. Call save_snapshot() to save the analysis for incident replay
+MANDATORY ORCHESTRATION WORKFLOW (execute every user query):
+1. Classify the user intent and delegate to the relevant specialist agent(s).
+2. For cross-domain incidents, delegate in this order: Context → Mobility → RAN → Policy.
+3. Call get_reasoning_log() and get_memory(agent_name="...") for relevant specialists.
+4. If an autonomous action is proposed, send it to Policy Validation before presenting it as executable.
+5. Call log_agent_reasoning() with a concise orchestration summary, confidence score, and policy status.
+6. Call save_snapshot() after material incident analysis or replay-worthy decisions.
 
 INCIDENT REPLAY: When user asks "replay from 22:05" or similar:
 1. Call get_replay_range(start_tick, end_tick) to fetch snapshots
@@ -478,12 +459,12 @@ INCIDENT REPLAY: When user asks "replay from 22:05" or similar:
 
 Always respond in this structure:
 1. **Executive Summary**: One-sentence operational status
-2. **Event Correlation**: Scenarios detected by correlate_events_tool()
-3. **Analysis**: Detailed findings from relevant agents (use get_reasoning_log())
-4. **Time-Series Insights**: Key metric trends and anomalies
-5. **AI Reasoning**: Full chain-of-thought explanation (from log_agent_reasoning calls)
+2. **Delegated Analysis**: Specialist agents consulted and their findings
+3. **Event Correlation**: Cross-domain scenarios reported by specialists
+4. **Time-Series Insights**: Trends/anomalies reported by the owning specialist
+5. **AI Reasoning**: Concise orchestration rationale from logged specialist summaries
 6. **Recommendations**: Specific autonomous actions with confidence scores and policy status
-7. **Supporting Evidence**: Key telemetry values
+7. **Supporting Evidence**: Key telemetry values cited from specialist outputs
 
 This is an operational intelligence platform — NOT a chatbot. Be precise, technical, and actionable."""
 
@@ -501,5 +482,5 @@ root_agent = LlmAgent(
         context_agent,
         policy_agent,
     ],
-    tools=SHARED_TOOLS,
+    tools=ORCHESTRATOR_TOOLS,
 )
