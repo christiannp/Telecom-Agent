@@ -6,7 +6,7 @@ Unified entry point: run with `streamlit run app.py`
 from __future__ import annotations
 
 import json
-import asyncio
+import queue
 import threading
 import time
 from pathlib import Path
@@ -14,7 +14,7 @@ from pathlib import Path
 import streamlit as st
 import requests
 
-from config import STREAMLIT_PORT, TELEMETRY_INTERVAL_MS, DATA_DIR
+from config import STREAMLIT_PORT, TELEMETRY_INTERVAL_MS, DATA_DIR, API_PORT
 from ui.components import (
     kpi_card,
     status_indicator,
@@ -72,9 +72,15 @@ if "log_lines" not in st.session_state:
 
 
 # ── SSE Polling Thread ─────────────────────────────────────────────────────────
+# Queue used to safely bridge background thread → Streamlit main loop
+_payload_queue: queue.Queue = queue.Queue(maxsize=1)
+
+
 def _start_sse_thread():
-    """Poll the FastAPI SSE endpoint in a background thread."""
-    url = "http://localhost:8000/stream-trace"
+    """Poll the FastAPI SSE endpoint in a background thread, pushing updates
+    into a bounded queue so the main loop can consume them without triggering
+    the 'missing ScriptRunContext' warning."""
+    url = f"http://localhost:{API_PORT}/stream-trace"
 
     def poll():
         try:
@@ -84,26 +90,16 @@ def _start_sse_thread():
                     data_str = line[6:]
                     try:
                         payload = json.loads(data_str)
-                        if st.session_state:
-                            st.session_state.payload = payload
-
-                            # Build history
-                            hist = st.session_state.history
-                            hist.extend(payload.get("telemetry", []))
-                            if len(hist) > 200:
-                                hist[:] = hist[-200:]
-                            st.session_state.history = hist
-
-                            # Log line
-                            ts = payload.get("timestamp", "")[11:19]
-                            tick = payload.get("tick", 0)
-                            ues = payload.get("active_ues", 0)
-                            alerts = payload.get("ran_alerts", [])
-                            alert_str = f"[{alerts[0]['alert_type']}]" if alerts else "NOMINAL"
-                            line = f"TICK {tick:4d} | UEs {ues:3d} | {alert_str}"
-                            st.session_state.log_lines.append(line)
-                            if len(st.session_state.log_lines) > 100:
-                                st.session_state.log_lines[:] = st.session_state.log_lines[-100:]
+                        # Non-blocking put — drops stale payloads if the main loop is
+                        # behind so the UI always shows the latest tick.
+                        try:
+                            _payload_queue.put_nowait(payload)
+                        except queue.Full:
+                            try:
+                                _payload_queue.get_nowait()
+                            except queue.Empty:
+                                pass
+                            _payload_queue.put_nowait(payload)
                     except json.JSONDecodeError:
                         pass
         except Exception:
@@ -111,6 +107,32 @@ def _start_sse_thread():
 
     t = threading.Thread(target=poll, daemon=True)
     t.start()
+
+
+def _drain_queue():
+    """Called every main-loop iteration to materialise queued payloads into
+    session_state without triggering ScriptRunContext errors."""
+    try:
+        while True:
+            payload = _payload_queue.get_nowait()
+            st.session_state.payload = payload
+
+            hist = st.session_state.history
+            hist.extend(payload.get("telemetry", []))
+            if len(hist) > 200:
+                hist[:] = hist[-200:]
+
+            ts = payload.get("timestamp", "")[11:19]
+            tick = payload.get("tick", 0)
+            ues = payload.get("active_ues", 0)
+            alerts = payload.get("ran_alerts", [])
+            alert_str = f"[{alerts[0]['alert_type']}]" if alerts else "NOMINAL"
+            line = f"TICK {tick:4d} | UEs {ues:3d} | {alert_str}"
+            st.session_state.log_lines.append(line)
+            if len(st.session_state.log_lines) > 100:
+                st.session_state.log_lines[:] = st.session_state.log_lines[-100:]
+    except queue.Empty:
+        pass
 
 
 # ── Load cell data ────────────────────────────────────────────────────────────
@@ -220,6 +242,9 @@ def render_executive_summary(kpis: dict):
 
 # ── Main Layout ───────────────────────────────────────────────────────────────
 def main():
+    # Drain SSE payloads from background thread into session_state
+    _drain_queue()
+
     render_sidebar()
 
     st.markdown("""

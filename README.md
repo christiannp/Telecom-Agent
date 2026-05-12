@@ -33,7 +33,7 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Streamlit Dashboard (Port 8501)                  │
+│                    Streamlit Dashboard (Port 8500)                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
 │  │  Executive   │  │  Live RAN    │  │  Mobility    │             │
 │  │  KPI Panel   │  │  Telemetry   │  │  Map         │             │
@@ -46,7 +46,7 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 └─────────────────────────────────────────────────────────────────────┘
                                 ↓ SSE (Server-Sent Events)
 ┌─────────────────────────────────────────────────────────────────────┐
-│              FastAPI SSE Server (Port 8000)                         │
+│              FastAPI SSE Server (Port 8400)                         │
 │  Endpoint: /stream-trace → Real-time telemetry events              │
 └─────────────────────────────────────────────────────────────────────┘
                                 ↓
@@ -302,14 +302,21 @@ Terminal 2 — Streamlit Dashboard:
 ```bash
 source venv/bin/activate
 export $(cat .env | xargs)
-streamlit run streamlit_app.py --server.port 8501
+streamlit run streamlit_app.py --server.port 8500
+```
+
+Terminal 3 — ADK Multi-Agent Web UI:
+```bash
+source venv/bin/activate
+export $(cat .env | xargs)
+adk web --port 8080 --allow_origins "*" .
 ```
 
 ### Access the Platform
 
-- **Dashboard**: http://localhost:8501
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+- **Dashboard**: http://localhost:8500 — Live KPI charts, mobility map, AI console
+- **ADK Agents**: http://localhost:8080 — Chat with 5 AI agents
+- **API**: http://localhost:8400 — SSE stream `/stream-trace`, health `/health`
 
 Click **▶ Start Streaming** in the sidebar to begin the live demo.
 

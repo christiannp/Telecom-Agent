@@ -41,5 +41,5 @@ LOG_DIR.mkdir(exist_ok=True)
 DATA_DIR: Path = Path(__file__).parent / "data"
 
 # ── FastAPI ─────────────────────────────────────────────────────────────────
-API_PORT: int = int(os.getenv("API_PORT", "8000"))
-STREAMLIT_PORT: int = int(os.getenv("STREAMLIT_PORT", "8501"))
+API_PORT: int = int(os.getenv("API_PORT", "8400"))
+STREAMLIT_PORT: int = int(os.getenv("STREAMLIT_PORT", "8500"))
