@@ -84,7 +84,7 @@ adk web \
     --allow_origins "*" \
     --host 127.0.0.1 \
     --no-reload \
-    . \
+    adk_apps \
     > /dev/null 2>&1 &
 ADK_PID=$!
 echo "   ✓ ADK Web PID: $ADK_PID"
@@ -101,7 +101,7 @@ echo "   📊 Dashboard:    http://localhost:8500"
 echo "      • Live KPI panel, RSRP/SINR/TA/PRB charts"
 echo "      • Mobility map (Taipei Arena → MRT)"
 echo "      • AI reasoning console + autonomous actions"
-echo "      • Click ▶ Start Streaming in the sidebar"
+echo "      • Auto-connects to the SSE telemetry stream"
 echo ""
 echo "   🤖 ADK Agents:  http://localhost:8080"
 echo "      • Chat with 5 AI agents"

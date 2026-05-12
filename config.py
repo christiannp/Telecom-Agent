@@ -16,6 +16,14 @@ if _ENV_PATH.exists():
 OLLAMA_API_KEY: str = os.getenv("OLLAMA_API_KEY", "")
 OLLAMA_API_BASE: str = os.getenv("OLLAMA_API_BASE", "https://ollama.com/v1")
 LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/gemma4:31b-cloud")
+# LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/nemotron-3-super:cloud")
+
+# PAID LLM
+#LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/qwen3.5:397b-cloud")
+#LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/kimi-k2.6:cloud")
+#LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/minimax-m2.7:cloud")
+#LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/deepseek-v4-flash:cloud")
+#LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/glm-5.1:cloud")
 
 # ── Simulation ─────────────────────────────────────────────────────────────
 TELEMETRY_INTERVAL_MS: int = int(os.getenv("TELEMETRY_INTERVAL_MS", "500"))
@@ -43,3 +51,4 @@ DATA_DIR: Path = Path(__file__).parent / "data"
 # ── FastAPI ─────────────────────────────────────────────────────────────────
 API_PORT: int = int(os.getenv("API_PORT", "8400"))
 STREAMLIT_PORT: int = int(os.getenv("STREAMLIT_PORT", "8500"))
+ADK_PORT: int = int(os.getenv("ADK_PORT", "8080"))

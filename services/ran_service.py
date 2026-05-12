@@ -197,3 +197,266 @@ def calculate_cell_state(cell_id: str, telemetry_batch: List[UETelemetry]) -> Ce
         handover_success_rate=(sum(handover_success) / len(handover_success) * 100) if handover_success else 100.0,
         throughput_mbps_avg=statistics.mean(throughput_values),
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EVENT CORRELATION ENGINE  (Master Prompt §EVENT CORRELATION ENGINE)
+# ─────────────────────────────────────────────────────────────────────────────
+# Correlates: rising TA + falling RSRP + AoA variance + congestion spikes
+#           + weather + VIP density + MRT overload
+# Infers operational scenarios and recommends autonomous actions.
+# ══════════════════════════════════════════════════════════════════════════════
+from datetime import datetime as _dt
+from models import MobilityState, WeatherState, CorrelatedEvent, AlertSeverity
+import uuid as _uuid
+
+
+# Thresholds for correlation
+_CORRELATION_THRESHOLDS = {
+    "ta_increasing_pct": 0.65,     # 65% UEs with rising TA → mass egress
+    "rsrp_degradation_db": 12.0,  # 12dB RSRP drop → signal cliff / underground
+    "aoa_variance_threshold": 1200,  # AoA variance > 1200 → multi-path
+    "prb_congestion_pct": 80.0,    # PRB > 80% → congestion
+    "vip_density_threshold": 0.3,  # 30% VIPs in degraded area → VIP risk
+    "mrt_pressure_threshold": 60,  # MRT pressure > 60 → overload concern
+}
+
+
+def correlate_events(
+    telemetry_batch: list,
+    mobility_state: MobilityState,
+    weather_state: WeatherState,
+    vip_density_ratio: float = 0.0,
+    congestion_prb_pct: float = 0.0,
+) -> list[CorrelatedEvent]:
+    """
+    Master Event Correlation Engine.
+
+    Correlates signals across all intelligence domains to infer operational
+    scenarios and return a list of CorrelatedEvent objects, each tagged with:
+      - scenario label
+      - confidence
+      - signal correlation map
+      - inferred consequence
+      - recommended autonomous action
+
+    This is the core reasoning skill that turns raw telemetry into
+    actionable AI decisions. Called by the Intent Orchestration Agent
+    after each analysis cycle.
+    """
+    events: list[CorrelatedEvent] = []
+    now = _dt.now()
+
+    if not telemetry_batch:
+        return events
+
+    # ── Extract signal vectors ────────────────────────────────────────────────
+    ta_vals   = [t.metrics.ta for t in telemetry_batch]
+    rsrp_vals = [t.metrics.rsrp for t in telemetry_batch]
+    sinr_vals = [t.metrics.sinr for t in telemetry_batch]
+    prb_vals  = [t.metrics.prb_utilization for t in telemetry_batch]
+    aoa_vals  = [t.metrics.aoa for t in telemetry_batch]
+
+    ta_rising_pct = _rising_pct(ta_vals) if len(ta_vals) >= 5 else 0.0
+
+    # ── Scenario 1: MRT Underground Transition ──────────────────────────────
+    # Signal pattern: falling RSRP + stable/low TA change + high VIP density
+    # Inference: subscribers entering MRT underground — cell-edge degradation
+    rsrp_falling = _avg_trend(rsrp_vals) < -0.5
+    low_sinr_pct = sum(1 for s in sinr_vals if s < 8) / len(sinr_vals) if sinr_vals else 0
+
+    if rsrp_falling and low_sinr_pct > 0.3:
+        events.append(CorrelatedEvent(
+            timestamp=now,
+            event_id=f"evt_{_uuid.uuid4().hex[:8]}",
+            scenario_label="MRT_UNDERGROUND_TRANSITION",
+            agent_source="EventCorrelationEngine",
+            confidence=min(95.0, 60.0 + low_sinr_pct * 35),
+            signal_correlation={
+                "avg_rsrp": round(statistics.mean(rsrp_vals), 1),
+                "low_sinr_ratio": round(low_sinr_pct, 2),
+                "vip_density_ratio": vip_density_ratio,
+                "rainfall_mm_hr": weather_state.rainfall_mm_hr,
+            },
+            inferred_consequence=(
+                "Subscribers entering MRT underground platform. "
+                "Cell-edge RSRP degradation + SINR attenuation expected. "
+                "Risk: VIP QoE degradation, handover failures at cell boundary."
+            ),
+            recommended_autonomous_action="SMALL_CELL_STEERING",
+            severity=AlertSeverity.ORANGE,
+            metadata={"cell_edge_rsrp": round(statistics.mean(rsrp_vals[-5:]), 1)},
+        ))
+
+    # ── Scenario 2: Mass Egress Confirmed ────────────────────────────────────
+    # Signal pattern: TA rising + MRT congestion rising + weather impact
+    if ta_rising_pct >= _CORRELATION_THRESHOLDS["ta_increasing_pct"]:
+        events.append(CorrelatedEvent(
+            timestamp=now,
+            event_id=f"evt_{_uuid.uuid4().hex[:8]}",
+            scenario_label="MASS_EGRESS_CONFIRMED",
+            agent_source="EventCorrelationEngine",
+            confidence=min(95.0, 70.0 + ta_rising_pct * 25),
+            signal_correlation={
+                "ta_rising_pct": round(ta_rising_pct, 3),
+                "avg_ta": round(statistics.mean(ta_vals), 1),
+                "mrt_pressure": mobility_state.crowd_pressure_propagation,
+                "overall_congestion": mobility_state.overall_congestion,
+                "rainfall": weather_state.rainfall_mm_hr,
+                "egress_velocity_kmh": mobility_state.egress_velocity_kmh,
+            },
+            inferred_consequence=(
+                f"Confirmed mass egress from Taipei Arena. "
+                f"{round(ta_rising_pct * 100, 0):.0f}% of subscribers show increasing TA. "
+                "MRT ingress congestion escalating. Weather intensifying MRT preference."
+            ),
+            recommended_autonomous_action="TEMPORARY_LOAD_BALANCING",
+            severity=AlertSeverity.ORANGE,
+            metadata={
+                "active_ues": len(telemetry_batch),
+                "egress_progress_pct": round(ta_rising_pct * 100, 1),
+            },
+        ))
+
+    # ── Scenario 3: Multi-path Interference + Arena Architecture ──────────────
+    # Signal pattern: high AoA variance + moderate SINR degradation
+    if len(aoa_vals) >= 10:
+        aoa_var = statistics.variance(aoa_vals)
+        if aoa_var >= _CORRELATION_THRESHOLDS["aoa_variance_threshold"]:
+            events.append(CorrelatedEvent(
+                timestamp=now,
+                event_id=f"evt_{_uuid.uuid4().hex[:8]}",
+                scenario_label="MULTIPATH_ARENA_ARCHITECTURE",
+                agent_source="EventCorrelationEngine",
+                confidence=min(92.0, 50.0 + (aoa_var / 2000) * 40),
+                signal_correlation={
+                    "aoa_variance": round(aoa_var, 1),
+                    "aoa_mean": round(statistics.mean(aoa_vals), 1),
+                    "avg_sinr": round(statistics.mean(sinr_vals), 1),
+                    "prb_congestion_pct": congestion_prb_pct,
+                },
+                inferred_consequence=(
+                    "Multi-path interference detected. Likely caused by "
+                    "Taipei Arena architecture (metal roof, reflective surfaces). "
+                    "Signal quality degradation and retransmission rate elevation expected."
+                ),
+                recommended_autonomous_action="ANTENNA_TILT_OPTIMIZATION",
+                severity=AlertSeverity.YELLOW,
+                metadata={"aoa_stdev": round(statistics.stdev(aoa_vals), 1)},
+            ))
+
+    # ── Scenario 4: VIP QoE Risk / SLA Violation ─────────────────────────────
+    # Signal pattern: VIP density + RSRP degradation + SINR low
+    vip_rsrp_vals = [t.metrics.rsrp for t in telemetry_batch
+                     if t.qos_class.value == "VIP_Premium"]
+    if vip_rsrp_vals and vip_density_ratio >= _CORRELATION_THRESHOLDS["vip_density_threshold"]:
+        vip_rsrp_avg = statistics.mean(vip_rsrp_vals)
+        vip_sinr_avg = statistics.mean(
+            t.metrics.sinr for t in telemetry_batch
+            if t.qos_class.value == "VIP_Premium"
+        )
+        vip_qoe_estimate = _rsrp_to_qoe(vip_rsrp_avg, vip_sinr_avg)
+        if vip_qoe_estimate < 80.0:
+            events.append(CorrelatedEvent(
+                timestamp=now,
+                event_id=f"evt_{_uuid.uuid4().hex[:8]}",
+                scenario_label="VIP_QOE_DEGRADATION_RISK",
+                agent_source="EventCorrelationEngine",
+                confidence=min(95.0, (80 - vip_qoe_estimate) * 2 + 50),
+                signal_correlation={
+                    "vip_count": len(vip_rsrp_vals),
+                    "vip_rsrp_avg": round(vip_rsrp_avg, 1),
+                    "vip_sinr_avg": round(vip_sinr_avg, 1),
+                    "vip_qoe_estimate": round(vip_qoe_estimate, 1),
+                    "sla_threshold": 80.0,
+                    "degradation_db": round(-120 - vip_rsrp_avg, 1),
+                },
+                inferred_consequence=(
+                    f"VIP SLA threshold at risk. Estimated VIP QoE: {vip_qoe_estimate:.0f}/100 "
+                    f"(SLA threshold: 80). {len(vip_rsrp_vals)} VIP subscribers "
+                    "experiencing degraded radio conditions."
+                ),
+                recommended_autonomous_action="VIP_PRIORITY_ROUTING",
+                severity=AlertSeverity.RED,
+                metadata={"qoe_delta_from_sla": round(80.0 - vip_qoe_estimate, 1)},
+            ))
+
+    # ── Scenario 5: Cell Congestion + PRB Saturation ────────────────────────
+    if congestion_prb_pct >= _CORRELATION_THRESHOLDS["prb_congestion_pct"]:
+        events.append(CorrelatedEvent(
+            timestamp=now,
+            event_id=f"evt_{_uuid.uuid4().hex[:8]}",
+            scenario_label="PRB_CELL_CONGESTION",
+            agent_source="EventCorrelationEngine",
+            confidence=min(95.0, 60.0 + (congestion_prb_pct - 80) * 2),
+            signal_correlation={
+                "avg_prb_pct": round(congestion_prb_pct, 1),
+                "max_prb": round(max(prb_vals), 1),
+                "active_ues": len(telemetry_batch),
+                "ta_rising_pct": round(ta_rising_pct, 3),
+                "avg_sinr": round(statistics.mean(sinr_vals), 1),
+            },
+            inferred_consequence=(
+                f"PRB utilization at {congestion_prb_pct:.0f}% — above congestion threshold. "
+                f"Cell resource saturation reducing throughput for all subscribers. "
+                "Autonomous load balancing recommended."
+            ),
+            recommended_autonomous_action="DYNAMIC_SLICE_ALLOCATION",
+            severity=AlertSeverity.RED if congestion_prb_pct > 90 else AlertSeverity.ORANGE,
+            metadata={"prb_headroom": round(100 - congestion_prb_pct, 1)},
+        ))
+
+    # ── Scenario 6: Signal Cliff / Underground Transition ───────────────────
+    # Signal pattern: rapid RSRP drop + stable TA (not moving toward cell, just indoors)
+    rsrp_drop = max(rsrp_vals) - min(rsrp_vals) if rsrp_vals else 0
+    ta_range  = max(ta_vals) - min(ta_vals) if ta_vals else 0
+    if rsrp_drop >= _CORRELATION_THRESHOLDS["rsrp_degradation_db"] and ta_range < 10:
+        events.append(CorrelatedEvent(
+            timestamp=now,
+            event_id=f"evt_{_uuid.uuid4().hex[:8]}",
+            scenario_label="SIGNAL_CLIFF_UNDERGROUND_TRANSITION",
+            agent_source="EventCorrelationEngine",
+            confidence=min(93.0, 50.0 + (rsrp_drop - 12) * 3),
+            signal_correlation={
+                "rsrp_drop_db": round(rsrp_drop, 1),
+                "rsrp_max": round(max(rsrp_vals), 1),
+                "rsrp_min": round(min(rsrp_vals), 1),
+                "ta_range": ta_range,
+                "ta_stable": ta_range < 10,
+            },
+            inferred_consequence=(
+                f"Signal cliff detected: RSRP drop {rsrp_drop:.0f}dB with stable TA. "
+                "Underground MRT transition likely. "
+                "Subscribers transitioning from outdoor to underground — "
+                "expect further SINR degradation without intervention."
+            ),
+            recommended_autonomous_action="SMALL_CELL_STEERING",
+            severity=AlertSeverity.RED,
+            metadata={"rsrp_recovery_expected": "micro-cell steering needed"},
+        ))
+
+    return events
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+def _rising_pct(values: list) -> float:
+    if len(values) < 2:
+        return 0.0
+    return sum(1 for i in range(1, len(values)) if values[i] > values[i - 1]) / (len(values) - 1)
+
+
+def _avg_trend(values: list) -> float:
+    """Positive = rising, negative = falling."""
+    if len(values) < 2:
+        return 0.0
+    mid = len(values) // 2
+    first = values[:mid] or values
+    second = values[mid:] or values
+    return statistics.mean(second) - statistics.mean(first)
+
+
+def _rsrp_to_qoe(rsrp: float, sinr: float) -> float:
+    """Estimate QoE (0-100) from RSRP and SINR."""
+    rsrp_factor = max(0, (rsrp + 120) / 30)   # -120 → 0, -90 → 1
+    sinr_factor = max(0, sinr / 20)            # 0 → 0, 20 → 1
+    return max(0, min(100, (rsrp_factor * 50) + (sinr_factor * 50)))

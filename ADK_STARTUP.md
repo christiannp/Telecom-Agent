@@ -40,7 +40,7 @@ Local URL: http://localhost:8500
 ```
 
 **Open browser:** http://localhost:8500  
-**Click:** ▶ Start Streaming
+The dashboard auto-connects to the SSE stream when the API is ready.
 
 ---
 
@@ -51,7 +51,7 @@ Local URL: http://localhost:8500
 cd telecom_agent
 source ../venv/bin/activate
 export $(cat .env | xargs)
-adk web --port 8080 --allow_origins "*" .
+adk web --port 8080 --allow_origins "*" adk_apps
 ```
 
 **Expected output:**
@@ -64,6 +64,9 @@ adk web --port 8080 --allow_origins "*" .
 
 **Open browser:** http://localhost:8080
 
+In the ADK app selector, choose **`telecom_agent`**. The app contains
+`root_agent` plus the four specialist sub-agents.
+
 ---
 
 ## Alternative: Use the Unified Startup Script
@@ -74,14 +77,14 @@ chmod +x run.sh
 ./run.sh
 ```
 
-This starts **FastAPI (8400) + Streamlit (8500)** together.  
-Then manually start ADK in a separate terminal:
+This starts **FastAPI (8400) + Streamlit (8500) + ADK Web (8080)** together.
+If you prefer to start ADK manually in a separate terminal:
 
 ```bash
 cd telecom_agent
 source ../venv/bin/activate
 export $(cat .env | xargs)
-adk web --port 8080 --allow_origins "*" .
+adk web --port 8080 --allow_origins "*" adk_apps
 ```
 
 ---
@@ -99,6 +102,9 @@ adk web --port 8080 --allow_origins "*" .
 ## Using the ADK Agents
 
 Once ADK web is running at **http://localhost:8080**, you can interact with the agents:
+
+Select the **`telecom_agent`** app first. ADK lists apps at the top level;
+`root_agent` coordinates the specialist agents inside that app.
 
 ### Available Agents
 
@@ -150,13 +156,14 @@ Each agent has access to these 7 tools:
 
 **Error:** `Agent not found` or `No agents loaded`
 
-**Fix:** Ensure you're running `adk web` from the `telecom_agent/` directory:
+**Fix:** Ensure you're running `adk web` from the `telecom_agent/` directory and pointing it at the ADK app wrapper:
 ```bash
 cd telecom_agent
-adk web --port 8080 .
+adk web --port 8080 adk_apps
 ```
 
-The `.` at the end tells ADK to look for `agent.py` in the current directory.
+ADK 1.33 expects an agents directory whose child folders contain `agent.py`.
+The `adk_apps` wrapper exposes this project as the `telecom_agent` app.
 
 ---
 
@@ -261,7 +268,7 @@ cd telecom_agent && source ../venv/bin/activate && export $(cat .env | xargs) &&
 cd telecom_agent && source ../venv/bin/activate && export $(cat .env | xargs) && streamlit run streamlit_app.py --server.port 8500
 
 # Terminal 3
-cd telecom_agent && source ../venv/bin/activate && export $(cat .env | xargs) && adk web -
+cd telecom_agent && source ../venv/bin/activate && export $(cat .env | xargs) && adk web --port 8080 --allow_origins "*" adk_apps
 ```
 
 Then open:

@@ -14,7 +14,15 @@ from pathlib import Path
 import streamlit as st
 import requests
 
-from config import STREAMLIT_PORT, TELEMETRY_INTERVAL_MS, DATA_DIR, API_PORT
+from config import (
+    STREAMLIT_PORT,
+    TELEMETRY_INTERVAL_MS,
+    UI_REFRESH_RATE,
+    DATA_DIR,
+    API_PORT,
+    ADK_PORT,
+    OLLAMA_API_KEY,
+)
 from ui.components import (
     kpi_card,
     status_indicator,
@@ -36,14 +44,7 @@ from ui.charts import (
 )
 from ui.maps import render_map_st
 
-# ── Dark Theme CSS ─────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="CovMo™ — Telecom Intelligence Platform",
-    page_icon="📡",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-st.markdown("""
+DASHBOARD_CSS = """
 <style>
     * { font-family: 'Courier New', monospace !important; }
     [data-testid="stAppViewContainer"] { background: #0A1428; }
@@ -58,38 +59,117 @@ st.markdown("""
     ::-webkit-scrollbar-track { background: #0A1428; }
     ::-webkit-scrollbar-thumb { background: #2A3A4A; border-radius: 3px; }
 </style>
-""", unsafe_allow_html=True)
+"""
+
+
+# ── Page Setup ────────────────────────────────────────────────────────────────
+def _configure_page() -> None:
+    st.set_page_config(
+        page_title="CovMo™ — Telecom Intelligence Platform",
+        page_icon="📡",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+    st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
 
 # ── Session State ──────────────────────────────────────────────────────────────
-if "payload" not in st.session_state:
-    st.session_state.payload = None
-if "history" not in st.session_state:
-    st.session_state.history = []
-if "streaming" not in st.session_state:
-    st.session_state.streaming = False
-if "log_lines" not in st.session_state:
-    st.session_state.log_lines = []
-
+def _init_session_state() -> None:
+    """Ensure Streamlit session keys exist even when this module is cached."""
+    if "payload" not in st.session_state:
+        st.session_state.payload = None
+    if "history" not in st.session_state:
+        st.session_state.history = []
+    if "streaming" not in st.session_state:
+        st.session_state.streaming = True
+    if "auto_connect_initialized" not in st.session_state:
+        st.session_state.auto_connect_initialized = True
+        st.session_state.streaming = True
+    if "log_lines" not in st.session_state:
+        st.session_state.log_lines = []
+    if "last_payload_received" not in st.session_state:
+        st.session_state.last_payload_received = 0.0
+    if "sse_error" not in st.session_state:
+        st.session_state.sse_error = None
 
 # ── SSE Polling Thread ─────────────────────────────────────────────────────────
 # Queue used to safely bridge background thread → Streamlit main loop
 _payload_queue: queue.Queue = queue.Queue(maxsize=1)
+_sse_thread: threading.Thread | None = None
+_sse_stop_event = threading.Event()
+_sse_state_lock = threading.Lock()
+_sse_state = {
+    "connected": False,
+    "error": None,
+    "last_event_at": 0.0,
+}
+
+
+def _set_sse_state(**updates) -> None:
+    with _sse_state_lock:
+        _sse_state.update(updates)
+
+
+def _get_sse_state() -> dict:
+    with _sse_state_lock:
+        return dict(_sse_state)
+
+
+def _probe_json(url: str, timeout: float = 0.4):
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
+def _api_is_ready() -> bool:
+    data = _probe_json(f"http://127.0.0.1:{API_PORT}/health")
+    return data == {"status": "healthy"}
+
+
+def _adk_is_ready() -> bool:
+    data = _probe_json(f"http://127.0.0.1:{ADK_PORT}/list-apps")
+    return isinstance(data, list) and "telecom_agent" in data
 
 
 def _start_sse_thread():
     """Poll the FastAPI SSE endpoint in a background thread, pushing updates
     into a bounded queue so the main loop can consume them without triggering
     the 'missing ScriptRunContext' warning."""
-    url = f"http://localhost:{API_PORT}/stream-trace"
+    global _sse_thread
+
+    if _sse_thread and _sse_thread.is_alive():
+        return
+
+    _sse_stop_event.clear()
+    _set_sse_state(connected=False, error=None)
+    url = f"http://127.0.0.1:{API_PORT}/stream-trace"
 
     def poll():
-        try:
-            resp = requests.get(url, stream=True, timeout=30)
-            for line in resp.iter_lines(decode_unicode=True):
-                if line.startswith("data: "):
-                    data_str = line[6:]
-                    try:
-                        payload = json.loads(data_str)
+        while not _sse_stop_event.is_set():
+            try:
+                with requests.get(url, stream=True, timeout=(3, 30)) as resp:
+                    resp.raise_for_status()
+                    _set_sse_state(connected=True, error=None)
+
+                    for line in resp.iter_lines(decode_unicode=True):
+                        if _sse_stop_event.is_set():
+                            break
+                        if not line or not line.startswith("data: "):
+                            continue
+
+                        data_str = line[6:]
+                        try:
+                            payload = json.loads(data_str)
+                        except json.JSONDecodeError as exc:
+                            _set_sse_state(error=f"Bad SSE payload: {exc}")
+                            continue
+
+                        if "error" in payload:
+                            _set_sse_state(error=payload["error"])
+                            continue
+
                         # Non-blocking put — drops stale payloads if the main loop is
                         # behind so the UI always shows the latest tick.
                         try:
@@ -100,13 +180,26 @@ def _start_sse_thread():
                             except queue.Empty:
                                 pass
                             _payload_queue.put_nowait(payload)
-                    except json.JSONDecodeError:
-                        pass
-        except Exception:
-            pass
 
-    t = threading.Thread(target=poll, daemon=True)
-    t.start()
+                        _set_sse_state(
+                            connected=True,
+                            error=None,
+                            last_event_at=time.time(),
+                        )
+            except Exception as exc:
+                _set_sse_state(connected=False, error=str(exc))
+                if _sse_stop_event.wait(1.0):
+                    break
+
+        _set_sse_state(connected=False)
+
+    _sse_thread = threading.Thread(target=poll, daemon=True)
+    _sse_thread.start()
+
+
+def _stop_sse_thread():
+    _sse_stop_event.set()
+    _set_sse_state(connected=False)
 
 
 def _drain_queue():
@@ -116,6 +209,8 @@ def _drain_queue():
         while True:
             payload = _payload_queue.get_nowait()
             st.session_state.payload = payload
+            st.session_state.last_payload_received = time.time()
+            st.session_state.sse_error = None
 
             hist = st.session_state.history
             hist.extend(payload.get("telemetry", []))
@@ -133,6 +228,16 @@ def _drain_queue():
                 st.session_state.log_lines[:] = st.session_state.log_lines[-100:]
     except queue.Empty:
         pass
+
+
+def _schedule_refresh():
+    """Keep the live dashboard moving without requiring manual clicks."""
+    if not st.session_state.get("streaming"):
+        return
+
+    refresh_interval = max(0.25, float(UI_REFRESH_RATE))
+    time.sleep(refresh_interval)
+    st.rerun()
 
 
 # ── Load cell data ────────────────────────────────────────────────────────────
@@ -154,11 +259,37 @@ def render_sidebar():
         st.markdown("### 🔌 System Status")
 
         payload = st.session_state.get("payload")
+        api_ready = _api_is_ready()
+        adk_ready = _adk_is_ready()
+        sse_state = _get_sse_state()
+        payload_age = time.time() - st.session_state.last_payload_received
+        sse_live = bool(payload) and payload_age < max(3.0, float(UI_REFRESH_RATE) * 3)
+
+        status_indicator(
+            "Ollama LLM",
+            "CONFIGURED" if OLLAMA_API_KEY else "MISSING KEY",
+            "green" if OLLAMA_API_KEY else "red",
+        )
+        status_indicator(
+            "SSE Streamer",
+            "ACTIVE" if sse_live else "READY" if api_ready else "OFFLINE",
+            "cyan" if api_ready else "red",
+        )
+        status_indicator(
+            "AI Orchestration",
+            "RUNNING" if sse_live else "READY" if adk_ready else "ADK OFFLINE",
+            "purple" if adk_ready else "red",
+        )
+        status_indicator(
+            "SSE Connection",
+            "LIVE" if sse_live else "CONNECTING" if st.session_state.streaming and api_ready else "OFFLINE",
+            "green" if sse_live else "orange" if st.session_state.streaming and api_ready else "red",
+        )
+
+        if sse_state.get("error") and not sse_live:
+            st.caption(f"SSE: {sse_state['error']}")
+
         if payload:
-            status_indicator("Ollama LLM", "CONNECTED", "green")
-            status_indicator("SSE Streamer", "ACTIVE", "cyan")
-            status_indicator("AI Orchestration", "RUNNING", "purple")
-            status_indicator("SSE Connection", "LIVE", "green")
             status_indicator("Active Agents", "5 AGENTS", "cyan")
 
             tick = payload.get("tick", 0)
@@ -186,19 +317,24 @@ def render_sidebar():
                 status_indicator("Available", f"{mob.get('youbike_available', 0)} bikes", "green")
                 status_indicator("Empty Docks", f"{mob.get('youbike_empty_docks', 0)} docks", "orange")
 
-        else:
-            status_indicator("Ollama LLM", "CONNECTING...", "orange")
-            status_indicator("SSE Streamer", "STANDBY", "grey")
-            status_indicator("AI Orchestration", "IDLE", "grey")
-            status_indicator("SSE Connection", "OFFLINE", "red")
-
         st.divider()
 
         # Start/Stop controls
-        if st.button("▶ Start Streaming", type="primary", use_container_width=True):
-            st.session_state.streaming = True
-            _start_sse_thread()
-            st.rerun()
+        if st.session_state.streaming:
+            if st.button("■ Stop Streaming", use_container_width=True):
+                st.session_state.streaming = False
+                _stop_sse_thread()
+                st.rerun()
+            if st.button("↻ Reconnect SSE", use_container_width=True):
+                _stop_sse_thread()
+                time.sleep(0.2)
+                _start_sse_thread()
+                st.rerun()
+        else:
+            if st.button("▶ Start Streaming", type="primary", use_container_width=True):
+                st.session_state.streaming = True
+                _start_sse_thread()
+                st.rerun()
 
         st.caption("CovMo™ GenAI Telecom Intelligence Platform v1.0")
 
@@ -230,18 +366,33 @@ def render_executive_summary(kpis: dict):
         cols = st.columns(5)
         summary_items = [
             ("Congestion Prevented", f"{kpis.get('congestion_prevented', 0):.1f}%", "green"),
-            ("Est. SLA Savings", f"${kpis.get('estimated_sla_savings_usd', 0):.0f}", "cyan"),
-            ("AI Mitigation Success", f"{kpis.get('ai_mitigation_success_rate', 0):.1f}%", "green"),
+            ("Est SLA Savings", f"${kpis.get('estimated_sla_savings_usd', 0):.0f}", "orange"),
+            ("AI Mitigation Success", f"{kpis.get('ai_mitigation_success_rate', 0):.1f}%", "grey"),
             ("VIP Retention Risk Reduction", f"{kpis.get('vip_retention_risk_reduction', 0):.1f}%", "purple"),
             ("Active UEs", f"{st.session_state.payload.get('active_ues', 0) if st.session_state.payload else 0}", "cyan"),
         ]
         for col, (title, val, color) in zip(cols, summary_items):
             with col:
                 kpi_card(title, val, color=color)
+    
+    # Fix st.expander _arrow_ issue due to newer Streamlit versions
+    st.markdown("""
+    <style>
+    [data-testid="stIconMaterial"] {
+        display: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 # ── Main Layout ───────────────────────────────────────────────────────────────
 def main():
+    _configure_page()
+    _init_session_state()
+
+    if st.session_state.streaming:
+        _start_sse_thread()
+
     # Drain SSE payloads from background thread into session_state
     _drain_queue()
 
@@ -264,11 +415,11 @@ def main():
         st.markdown("""
         <div style="text-align:center; padding: 80px 20px; color:#B0BEC5; font-family:'Courier New',monospace;">
             <div style="font-size:48px; margin-bottom:20px;">📡</div>
-            <div style="font-size:24px; color:#00E5FF; margin-bottom:10px;">CovMo™ Platform Initializing</div>
-            <div style="font-size:14px;">Streaming synthetic telecom telemetry...</div>
-            <div style="font-size:14px; margin-top:8px;">Click <b>▶ Start Streaming</b> in the sidebar to begin.</div>
+            <div style="font-size:24px; color:#00E5FF; margin-bottom:10px;">CovMo™ Platform Connecting</div>
+            <div style="font-size:14px;">Waiting for the first SSE telemetry frame...</div>
         </div>
         """, unsafe_allow_html=True)
+        _schedule_refresh()
         return
 
     kpis = payload.get("telemetry", [{}])
@@ -392,6 +543,8 @@ def main():
         # Live Log
         st.markdown("### 📋 Live Telemetry Log")
         live_log_display(st.session_state.log_lines)
+
+    _schedule_refresh()
 
 
 if __name__.startswith("streamlit"):

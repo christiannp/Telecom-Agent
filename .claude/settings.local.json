@@ -22,7 +22,12 @@
       "Bash(curl -s http://localhost:8501/)",
       "Bash(curl -s http://localhost:8080/)",
       "Bash(curl -s --max-time 3 -L http://localhost:8080/)",
-      "Bash(curl -s --max-time 3 http://localhost:8080/web/)"
+      "Bash(curl -s --max-time 3 http://localhost:8080/web/)",
+      "Bash(find \"/Users/new/Desktop/GroundHog Demo\" -name \"Master Prompt.md\" 2>/dev/null)",
+      "Read(//Users/new/Desktop/GroundHog Demo/**)",
+      "Bash(python -c ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -m py_compile models.py services/telemetry_service.py services/ran_service.py services/__init__.py tools.py agents.py)"
     ]
   }
 }

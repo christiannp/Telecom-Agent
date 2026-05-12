@@ -215,8 +215,9 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 
 ```
 telecom_agent/
+├── adk_apps/                   # ADK web app wrapper directory
 ├── agent.py                    # Google ADK entry point
-├── agents.p         # Multi-agent definitions (5 agents)
+├── agents.py                   # Multi-agent definitions (5 agents)
 ├── tools.py                    # ADK tool functions (7 tools)
 ├── models.py                   # Pydantic data models
 ├── config.py                   # Environment-based configuration
@@ -309,22 +310,22 @@ Terminal 3 — ADK Multi-Agent Web UI:
 ```bash
 source venv/bin/activate
 export $(cat .env | xargs)
-adk web --port 8080 --allow_origins "*" .
+adk web --port 8080 --allow_origins "*" adk_apps
 ```
 
 ### Access the Platform
 
 - **Dashboard**: http://localhost:8500 — Live KPI charts, mobility map, AI console
-- **ADK Agents**: http://localhost:8080 — Chat with 5 AI agents
+- **ADK Agents**: http://localhost:8080 — Select `telecom_agent` to chat with the multi-agent system
 - **API**: http://localhost:8400 — SSE stream `/stream-trace`, health `/health`
 
-Click **▶ Start Streaming** in the sidebar to begin the live demo.
+The dashboard auto-connects to the SSE stream when the API is ready.
 
 ---
 
 ## 🎮 Demo Workflow
 
-1. **Start Streaming**: Click the button in the sidebar
+1. **Start Streaming**: The dashboard starts the SSE stream automatically
 2. **Watch Telemetry**: Live RSRP, SINR, TA, PRB charts update every second
 3. **Monitor Mobility**: Map shows crowd movement from Taipei Arena → MRT
 4. **AI Reasoning**: Multi-agent console displays real-time operational intelligence
@@ -456,8 +457,9 @@ ENABLE_WEATHER=true
 WEATHER_FALLBACK_RAIN_MM_HR=0.0
 
 # Ports
-API_PORT=8000
-STREAMLIT_PORT=8501
+API_PORT=8400
+STREAMLIT_PORT=8500
+ADK_PORT=8080
 ```
 
 ---
@@ -471,11 +473,11 @@ STREAMLIT_PORT=8501
 python -c "from streamer import _generate_batch; print('✓ Telemetry generation OK')"
 
 # Integration tests
-curl http://localhost:8000/health
-curl http://localhost:8501/_stcore/health
+curl http://localhost:8400/health
+curl http://localhost:8500/_stcore/health
 
 # End-to-end test
-curl -s --max-time 3 http://localhost:8000/stream-trace | head -1
+curl -s --max-time 3 http://localhost:8400/stream-trace | head -1
 ```
 
 ### Test Results

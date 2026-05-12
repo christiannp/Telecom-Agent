@@ -200,3 +200,81 @@ class AgentReasoningEntry(BaseModel):
     confidence: float = Field(ge=0.0, le=100.0)
     triggered_action: Optional[str] = None
     color: str = "cyan"  # cyan, green, orange, red, purple
+
+
+# ── Event Correlation Models ─────────────────────────────────────────────────
+class CorrelatedEvent(BaseModel):
+    """A unified event inferred by correlating RAN + Mobility + Weather signals."""
+    timestamp: datetime
+    event_id: str
+    scenario_label: str  # e.g. "MRT_UNDERGROUND_TRANSITION", "MASS_EGRESS"
+    agent_source: str
+    confidence: float = Field(ge=0.0, le=100.0)
+    signal_correlation: dict = Field(
+        description="Map of signal name → value that contributed to the inference"
+    )
+    inferred_consequence: str
+    recommended_autonomous_action: Optional[str] = None
+    severity: AlertSeverity = AlertSeverity.YELLOW
+    metadata: dict = Field(default_factory=dict)
+
+
+# ── Time-Series Analytics Models ───────────────────────────────────────────
+class TimeSeriesPoint(BaseModel):
+    """A single data point in a time series."""
+    timestamp: datetime
+    value: float
+    label: Optional[str] = None
+
+
+class TimeSeriesStats(BaseModel):
+    """Statistical summary of a time-series window."""
+    metric_name: str
+    window_size: int
+    current: float
+    mean: float
+    std_dev: float
+    min_val: float
+    max_val: float
+    trend_direction: str = Field(description="'rising', 'falling', 'stable'")
+    trend_pct: float = Field(description="Percent change over the window")
+    anomaly_detected: bool = False
+    anomaly_reason: Optional[str] = None
+    forecast_next: float = Field(description="Predicted next value")
+    confidence_interval: tuple[float, float] = (0.0, 0.0)
+
+
+# ── Incident Replay Models ───────────────────────────────────────────────────
+class ReplaySnapshot(BaseModel):
+    """A point-in-time snapshot of the full system state for replay."""
+    tick: int
+    timestamp: datetime
+    active_ues: int
+    kpis: KPIState
+    telemetry_sample: list[UETelemetry]
+    alerts: list[RANAlert]
+    reasoning_log: list[AgentReasoningEntry]
+    executed_actions: list[AutonomousAction]
+
+
+class ReplayController(BaseModel):
+    """Controls for incident replay."""
+    status: str = "paused"  # playing, paused, stopped
+    speed: float = 1.0  # 0.5x, 1x, 2x, 5x, 10x
+    current_tick: int = 0
+    start_tick: int = 0
+    end_tick: int = 0
+    visible_ticks: list[int] = Field(default_factory=list)
+
+
+# ── Continuous Monitoring Models ────────────────────────────────────────────
+class MonitoringState(BaseModel):
+    """Tracks the state of a continuous monitoring loop per agent."""
+    agent_name: str
+    monitoring_active: bool = False
+    last_monitored_tick: int = 0
+    alert_count: int = 0
+    last_alert_type: Optional[str] = None
+    last_alert_severity: Optional[AlertSeverity] = None
+    consecutive_checks: int = 0
+    escalation_level: int = 0  # 0-3

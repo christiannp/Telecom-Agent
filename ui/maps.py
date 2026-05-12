@@ -264,7 +264,7 @@ def render_mobility_map(
     return m
 
 
-def render_map_st(melemetry: List[Dict], cells_data: List[Dict], progress: float = 0.5) -> None:
+def render_map_st(telemetry: List[Dict], cells_data: List[Dict], progress: float = 0.5) -> None:
     """
     Render mobility map directly in Streamlit using streamlit-folium.
     Call this inside a st.container() or st.column().
