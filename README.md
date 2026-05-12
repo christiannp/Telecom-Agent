@@ -8,7 +8,6 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-red.svg)](https://streamlit.io/)
 [![License](https://img.shields.io/badge/License-Proprietary-yellow.svg)]()
-
 ![CovMo Platform](https://img.shields.io/badge/Status-Operational-brightgreen)
 
 ### Key Capabilities
