@@ -1,0 +1,60 @@
+[
+  {
+    "cell_id": "TW_TPE_ARENA_01",
+    "name": "Taipei Arena Macro Cell",
+    "location": { "lat": 25.0516, "lon": 121.5500 },
+    "azimuth_deg": 0,
+    "height_m": 25,
+    "cell_type": "macro",
+    "frequency_mhz": 2110,
+    "bandwidth_mhz": 20,
+    "max_tx_power_dbm": 43,
+    "sectors": [
+      { "sector_id": "S1", "azimuth": 0, "half_power_beamwidth": 65, "max_rs_power_dbm": 15 },
+      { "sector_id": "S2", "azimuth": 120, "half_power_beamwidth": 65, "max_rs_power_dbm": 15 },
+      { "sector_id": "S3", "azimuth": 240, "half_power_beamwidth": 65, "max_rs_power_dbm": 15 }
+    ]
+  },
+  {
+    "cell_id": "TW_TPE_ARENA_SC01",
+    "name": "Taipei Arena Small Cell North",
+    "location": { "lat": 25.0522, "lon": 121.5510 },
+    "azimuth_deg": 315,
+    "height_m": 6,
+    "cell_type": "small_cell",
+    "frequency_mhz": 2130,
+    "bandwidth_mhz": 10,
+    "max_tx_power_dbm": 30,
+    "sectors": [
+      { "sector_id": "SC1", "azimuth": 315, "half_power_beamwidth": 90, "max_rs_power_dbm": 10 }
+    ]
+  },
+  {
+    "cell_id": "TW_TPE_ARENA_SC02",
+    "name": "Taipei Arena Small Cell South",
+    "location": { "lat": 25.0505, "lon": 121.5490 },
+    "azimuth_deg": 135,
+    "height_m": 6,
+    "cell_type": "small_cell",
+    "frequency_mhz": 2130,
+    "bandwidth_mhz": 10,
+    "max_tx_power_dbm": 30,
+    "sectors": [
+      { "sector_id": "SC2", "azimuth": 135, "half_power_beamwidth": 90, "max_rs_power_dbm": 10 }
+    ]
+  },
+  {
+    "cell_id": "TW_TPE_MRT_NS_01",
+    "name": "Nanjing Fuxing MRT Underground",
+    "location": { "lat": 25.0528, "lon": 121.5445 },
+    "azimuth_deg": 0,
+    "height_m": -3,
+    "cell_type": "distributed_antenna",
+    "frequency_mhz": 2110,
+    "bandwidth_mhz": 20,
+    "max_tx_power_dbm": 20,
+    "sectors": [
+      { "sector_id": "MRT_S1", "azimuth": 0, "half_power_beamwidth": 360, "max_rs_power_dbm": 0 }
+    ]
+  }
+]

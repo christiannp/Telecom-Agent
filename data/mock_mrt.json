@@ -1,0 +1,16 @@
+{
+  "station_uid": "BL12",
+  "name": "Nanjing-Fuxing Station",
+  "line": "Blue Line",
+  "location": { "lat": 25.0528, "lon": 121.5445 },
+  "exits": [
+    { "exit_id": "EXIT_1", "name": "Exit 1 - Arena Direction", "location": { "lat": 25.0520, "lon": 121.5460 }, "azimuth_from_arena_deg": 270, "distance_from_arena_m": 450 },
+    { "exit_id": "EXIT_2", "name": "Exit 2 - Fuxing North Road", "location": { "lat": 25.0532, "lon": 121.5440 }, "azimuth_from_arena_deg": 330, "distance_from_arena_m": 620 },
+    { "exit_id": "EXIT_3", "name": "Exit 3 - Songshan District Office", "location": { "lat": 25.0540, "lon": 121.5455 }, "azimuth_from_arena_deg": 15, "distance_from_arena_m": 850 }
+  ],
+  "platforms": [
+    { "platform_id": "PLATFORM_1", "line": "Blue Line Direction to Taipei Main Station", "congestion_capacity": 800, "current_load": 0 },
+    { "platform_id": "PLATFORM_2", "line": "Blue Line Direction to Nangang", "congestion_capacity": 800, "current_load": 0 }
+  ],
+  "taipei_arena": { "name": "Taipei Arena", "location": { "lat": 25.0516, "lon": 121.5500 }, "distance_to_mrt_m": 450, "primary_exit_direction_deg": 270 }
+}

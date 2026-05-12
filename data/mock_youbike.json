@@ -1,0 +1,11 @@
+{
+  "station_uid": "500101077",
+  "name": "YouBike Arena Station",
+  "location": { "lat": 25.0518, "lon": 121.5492 },
+  "total_docks": 60,
+  "available_bikes": 12,
+  "empty_docks": 8,
+  "usage_pressure": "moderate",
+  "last_updated": "2026-05-12T22:00:00+08:00",
+  "alerts": []
+}
