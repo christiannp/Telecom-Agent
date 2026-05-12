@@ -1,8 +1,8 @@
-# 📡 CovMo™ GenAI Telecom Intelligence Platform
+# 📡 CovMo™ Telecom Agent
 
 > **Intent-Based RAN Optimization · Urban Mobility Intelligence · AI Autonomous Operations**
 
-A production-grade AI-powered telecom operational intelligence platform demonstrating real-time network optimization using multi-agent AI orchestration. Built with Google ADK, LiteLLM, and Ollama.
+**CovMo™** is an enterprise-grade telecom intelligence platform that simulates the **Taipei Arena Power Station Concert Egress** scenario (May 15, 2026, 22:00). The system demonstrates how AI can autonomously optimize telecom networks during mass egress events.
 
 [![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
@@ -10,12 +10,6 @@ A production-grade AI-powered telecom operational intelligence platform demonstr
 [![License](https://img.shields.io/badge/License-Proprietary-yellow.svg)]()
 
 ![CovMo Platform](https://img.shields.io/badge/Status-Operational-brightgreen)
-
----
-
-## Overview
-
-**CovMo™** is an enterprise-grade telecom intelligence platform that simulates the **Taipei Arena Power Station Concert Egress** scenario (May 15, 2026, 22:00). The system demonstrates how AI can autonomously optimize telecom networks during mass egress events.
 
 ### Key Capabilities
 
