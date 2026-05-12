@@ -28,18 +28,19 @@
 ## System Architecture
 
 ```
-Streamlit Dashboard (8500) ──SSE──> FastAPI Server (8400) ──> Telemetry Streamer
-                                             │
+                                 Streamlit Dashboard (8500)
+                                             ↓
+                                 FastAPI Server (Port 8400)
+                                             ↓
+                                    Telemetry Streamer
                                              ↓
                               AI Correlation & Analytics Layer
-                                             │
                                              ↓
                              Google ADK Multi-Agent Orchestration
-                                             │
-                        ┌─────────┬──────────┼──────────┬─────────┐
-                        │   RAN   │ Mobility │ Context  │ Policy  │
-                        │  Agent  │  Agent   │  Agent   │  Agent  │
-                        └─────────┴──────────┴──────────┴─────────┘
+                          ┌───────┬──────────┼──────────┬─────────┐
+                          │  RAN  │ Mobility │ Context  │ Policy  │
+                          │ Agent │  Agent   │  Agent   │  Agent  │
+                          └───────┴──────────┴──────────┴─────────┘
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.

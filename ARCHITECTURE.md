@@ -10,7 +10,7 @@
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│                    Streamlit Dashboard (Port 8500)                │
+│                   Streamlit Dashboard (Port 8500)                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
 │  │  Executive   │  │  Live RAN    │  │  Mobility    │             │
 │  │  KPI Panel   │  │  Telemetry   │  │  Map         │             │
@@ -23,12 +23,12 @@
 └───────────────────────────────────────────────────────────────────┘
                                 ↓ SSE (Server-Sent Events)
 ┌───────────────────────────────────────────────────────────────────┐
-│              FastAPI SSE Server (Port 8400)                       │
+│                FastAPI SSE Server (Port 8400)                     │
 │  Endpoint: /stream-trace → Real-time telemetry events             │
 └───────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌───────────────────────────────────────────────────────────────────┐
-│              Telemetry Streamer (500ms ticks)                     │
+│                Telemetry Streamer (500ms ticks)                   │
 │  • Generates 10-20 UE traces per tick                             │
 │  • Simulates crowd egress (Arena → MRT)                           │
 │  • Models signal degradation, congestion, handovers               │
@@ -37,8 +37,8 @@
 └───────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌───────────────────────────────────────────────────────────────────┐
-│         AI Correlation & Analytics Layer                          │
-│  ┌──────────────────┐  ┌─────────────────��┐                       │
+│                 AI Correlation & Analytics Layer                  │
+│  ┌──────────────────┐  ┌──────────────────┐                       │
 │  │ RAN Intelligence │  │ Mobility         │                       │
 │  │ Engine           │  │ Intelligence     │                       │
 │  │ • Signal cliffs  │  │ • MRT congestion │                       │
@@ -55,25 +55,25 @@
 └───────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌───────────────────────────────────────────────────────────────────┐
-│         Google ADK Multi-Agent Orchestration                      │
+│              Google ADK Multi-Agent Orchestration                 │
 │                                                                   │
-│              ┌─────────────────────────────┐                      │
-│              │  Intent Orchestration Agent │                      │
-│              │  (root_agent)               │                      │
-│              │  • Coordinates sub-agents   │                      │
-│              │  • Interprets user intent   │                      │
-│              │  • Provides unified intel   │                      │
-│              └─────────────────────────────┘                      │
-│                          ↓                                        │
-│     ┌────────────┬──────────┬───────────┬───────────┐             │
-│     │            │          │           │           │             │
-│     ▼            ▼          ▼           ▼           ▼             │
-│┌────────┐   ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐        │
-││  RAN   │   │Mobility│  │Context │  │ Policy │  │ Tools  │        │
-││ Agent  │   │ Agent  │  │ Agent  │  │ Agent  │  │ (7x)   │        │
-│└────────┘   └────────┘  └────────┘  └────────┘  └────────┘        │
+│                ┌─────────────────────────────┐                    │
+│                │  Intent Orchestration Agent │                    │
+│                │        (root_agent)         │                    │
+│                │  • Coordinates sub-agents   │                    │
+│                │  • Interprets user intent   │                    │
+│                │  • Provides unified intel   │                    │
+│                └─────────────────────────────┘                    │
+│                              ↓                                    │
+│       ┌───────────┬──────────┬───────────┬───────────┐            │
+│       │           │          │           │           │            │
+│       ▼           ▼          ▼           ▼           ▼            │
+│  ┌────────┐   ┌────────┐  ┌────────┐  ┌────────┐  ┌───────┐       │
+│  │  RAN   │   │Mobility│  │Context │  │ Policy │  │ Tools │       │
+│  │ Agent  │   │ Agent  │  │ Agent  │  │ Agent  │  │ (7x)  │       │
+│  └────────┘   └────────┘  └────────┘  └────────┘  └───────┘       │
 │                                                                   │
-│  Model: Ollama Cloud (MiniMax M2.5 230B) via LiteLLM              │
+│       Model: Ollama Cloud (MiniMax M2.5 230B) via LiteLLM         │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
