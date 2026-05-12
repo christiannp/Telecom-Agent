@@ -23,7 +23,9 @@
 - 📽️ **Incident Replay** — Snapshot-based historical scrubbing at major incident boundaries
 - 🔗 **Correlated Event Pipeline** — 6 unified scenario detectors cross-correlating RAN + Mobility + Context signals
 
-### System Architecture
+---
+
+## System Architecture
 
 ```
 Streamlit Dashboard (8500) ──SSE──> FastAPI Server (8400) ──> Telemetry Streamer
@@ -42,7 +44,9 @@ Streamlit Dashboard (8500) ──SSE──> FastAPI Server (8400) ──> Teleme
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 
-### Multi-agent Design
+---
+
+## Multi-agent Design
 
 The system uses 5 specialist agents coordinated by a root **Intent Orchestration Agent** via Google ADK:
 
