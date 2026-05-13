@@ -1,12 +1,12 @@
 {
-  "tick": 84,
+  "tick": 282,
   "status": "streaming",
   "active_ues": 90,
-  "subscriber_satisfaction_score": 51.6,
-  "vip_qoe_score": 40.94,
+  "subscriber_satisfaction_score": 51.95,
+  "vip_qoe_score": 45.62,
   "congestion_risk": 100.0,
   "ai_confidence": 90.0,
-  "sla_health": 46.27,
+  "sla_health": 48.79,
   "predicted_mobility_pressure": 100.0,
-  "timestamp": "2026-05-14T00:29:33.372243"
+  "timestamp": "2026-05-14T01:02:36.612696"
 }
