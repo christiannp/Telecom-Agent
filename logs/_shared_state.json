@@ -1,12 +1,12 @@
 {
-  "tick": 878,
+  "tick": 40,
   "status": "streaming",
   "active_ues": 90,
-  "subscriber_satisfaction_score": 52.34,
-  "vip_qoe_score": 45.31,
-  "congestion_risk": 100.0,
-  "ai_confidence": 90.0,
-  "sla_health": 48.82,
-  "predicted_mobility_pressure": 100.0,
-  "timestamp": "2026-05-13T23:41:21.034995"
+  "subscriber_satisfaction_score": 61.1,
+  "vip_qoe_score": 43.63,
+  "congestion_risk": 84.16,
+  "ai_confidence": 80.0,
+  "sla_health": 52.36,
+  "predicted_mobility_pressure": 60.0,
+  "timestamp": "2026-05-14T00:22:12.274958"
 }

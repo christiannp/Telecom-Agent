@@ -10,6 +10,16 @@
 [![License](https://img.shields.io/badge/License-Proprietary-yellow.svg)]()
 ![CovMo Platform](https://img.shields.io/badge/Status-Operational-brightgreen)
 
+<iframe
+  width="100%"
+  height="400"
+  src="https://www.youtube.com/embed/KVUrAmhfZic"
+  title="Telecom Agent Demo"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin" allowfullscreen>
+</iframe>
+
 ### Key Capabilities
 
 - 🔴 **Real-time Level-2 RAN Telemetry** — RSRP, SINR, TA, PRB, CQI streaming at 1-tick / 10-second intervals
