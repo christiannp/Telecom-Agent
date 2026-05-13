@@ -10,15 +10,7 @@
 [![License](https://img.shields.io/badge/License-Proprietary-yellow.svg)]()
 ![CovMo Platform](https://img.shields.io/badge/Status-Operational-brightgreen)
 
-<iframe
-  width="100%"
-  height="400"
-  src="https://www.youtube.com/embed/KVUrAmhfZic"
-  title="Telecom Agent Demo"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin" allowfullscreen>
-</iframe>
+[![Telecom Agent Demo](https://img.youtube.com/vi/KVUrAmhfZic/maxresdefault.jpg)](https://www.youtube.com/watch?v=KVUrAmhfZic)
 
 ### Key Capabilities
 
