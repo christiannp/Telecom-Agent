@@ -67,12 +67,11 @@ DASHBOARD_CSS = """
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0A1428; }
     ::-webkit-scrollbar-thumb { background: #2A3A4A; border-radius: 3px; }
-    /* Hide Streamlit's native toolbar */
+    /* Hide Streamlit's native toolbar (keep header for sidebar toggle) */
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stMainMenuButton"] { display: none !important; }
-    [data-testid="stHeader"] { display: none !important; }
     /* Fix top padding so content starts at the very top of the viewport */
-    [data-testid="stMainBlockContainer"] { padding-top: 0 !important; }    
+    [data-testid="stMainBlockContainer"] { padding-top: 0 !important; }
 </style>
 """
 
@@ -83,7 +82,7 @@ def _configure_page() -> None:
         page_title="Telecom Intelligence Platform",
         page_icon="📡",
         layout="wide",
-        initial_sidebar_state="collapsed",
+        initial_sidebar_state="expanded",
     )
     st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
 
@@ -394,11 +393,6 @@ def _render_sidebar_content():
         st.button("▶ Start Streaming", type="primary", use_container_width=True, on_click=_start_streaming)
 
     st.session_state.stream_action = None
-
-
-def render_sidebar():
-    with st.sidebar:
-        _render_sidebar_content()
 
 
 # ── KPI Section ───────────────────────────────────────────────────────────────
