@@ -52,6 +52,7 @@ from services import (
 )
 from services.ran_service import correlate_events
 from services.telemetry_service import (
+    get_kpi_snapshot,
     save_replay_snapshot,
     start_monitoring,
     check_monitoring,
@@ -898,6 +899,7 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
         payload = {
             "tick": _tick,
             "timestamp": datetime.now().isoformat(),
+            "kpis": get_kpi_snapshot().model_dump(mode="json"),
             "telemetry": [t.model_dump(mode="json") for t in telemetry_batch],
             "ran_alerts": _ran_alerts,
             "mobility": mobility_dict,

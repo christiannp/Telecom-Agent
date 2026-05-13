@@ -14,7 +14,7 @@ if _ENV_PATH.exists():
 
 # ── LLM / Ollama ────────────────────────────────────────────────────────────
 OLLAMA_API_KEY: str = os.getenv("OLLAMA_API_KEY", "")
-OLLAMA_API_BASE: str = os.getenv("OLLAMA_API_BASE", "https://ollama.com/v1")
+OLLAMA_API_BASE: str = os.getenv("OLLAMA_API_BASE", "https://ollama.com")
 # LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/gemma4:31b-cloud")
 # LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/nemotron-3-super:cloud")
 LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/minimax-m2.5:cloud")

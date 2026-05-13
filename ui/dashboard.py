@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import streamlit as st
+from streamlit.errors import StreamlitAPIException
 import requests
 
 from config import (
@@ -49,6 +50,9 @@ from ui.charts import (
 )
 from ui.maps import render_map_st
 
+STREAM_REFRESH_INTERVAL_SEC = max(0.25, float(UI_REFRESH_RATE))
+MAP_REFRESH_INTERVAL_SEC = max(2.0, STREAM_REFRESH_INTERVAL_SEC * 3)
+
 DASHBOARD_CSS = """
 <style>
     * { font-family: 'Courier New', monospace !important; }
@@ -63,6 +67,12 @@ DASHBOARD_CSS = """
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0A1428; }
     ::-webkit-scrollbar-thumb { background: #2A3A4A; border-radius: 3px; }
+    /* Hide Streamlit's native toolbar */
+    [data-testid="stToolbar"] { display: none !important; }
+    [data-testid="stMainMenuButton"] { display: none !important; }
+    [data-testid="stHeader"] { display: none !important; }
+    /* Fix top padding so content starts at the very top of the viewport */
+    [data-testid="stMainBlockContainer"] { padding-top: 0 !important; }    
 </style>
 """
 
@@ -70,7 +80,7 @@ DASHBOARD_CSS = """
 # ── Page Setup ────────────────────────────────────────────────────────────────
 def _configure_page() -> None:
     st.set_page_config(
-        page_title="CovMo™ — Telecom Intelligence Platform",
+        page_title="Telecom Intelligence Platform",
         page_icon="📡",
         layout="wide",
         initial_sidebar_state="collapsed",
@@ -95,6 +105,8 @@ def _init_session_state() -> None:
         st.session_state.last_payload_received = 0.0
     if "sse_error" not in st.session_state:
         st.session_state.sse_error = None
+    if "stream_action" not in st.session_state:
+        st.session_state.stream_action = None
 
 # ── SSE Polling Thread ─────────────────────────────────────────────────────────
 # Queue used to safely bridge background thread → Streamlit main loop
@@ -235,14 +247,39 @@ def _drain_queue():
         pass
 
 
-def _schedule_refresh():
-    """Keep the live dashboard moving without requiring manual clicks."""
-    if not st.session_state.get("streaming"):
-        return
+def _sync_live_payload() -> None:
+    """Move the newest SSE frame into session state for fragment-local renders."""
+    if st.session_state.get("streaming"):
+        _start_sse_thread()
 
-    refresh_interval = max(0.25, float(UI_REFRESH_RATE))
-    time.sleep(refresh_interval)
-    st.rerun()
+    _drain_queue()
+    sse_state = _get_sse_state()
+    if sse_state.get("error"):
+        st.session_state.sse_error = sse_state["error"]
+
+
+def _current_payload() -> dict | None:
+    _sync_live_payload()
+    return st.session_state.get("payload")
+
+
+def _current_kpis(payload: dict | None) -> dict:
+    """Return KPI state from the SSE frame with a local fallback for old streams."""
+    kpis = (payload or {}).get("kpis")
+    if isinstance(kpis, dict):
+        return {key: val for key, val in kpis.items() if key != "timestamp"}
+
+    from services.telemetry_service import get_kpi_snapshot
+    fallback = get_kpi_snapshot().model_dump(mode="json")
+    return {key: val for key, val in fallback.items() if key != "timestamp"}
+
+
+def _rerun_fragment() -> None:
+    """Rerun only the current fragment when possible; fall back for legacy paths."""
+    try:
+        st.rerun(scope="fragment")
+    except StreamlitAPIException:
+        st.rerun()
 
 
 # ── Load cell data ────────────────────────────────────────────────────────────
@@ -254,100 +291,120 @@ def _load_cells() -> list:
     return []
 
 
+def _stop_streaming():
+    st.session_state.streaming = False
+    st.session_state.stream_action = "stop"
+    _stop_sse_thread()
+
+
+def _start_streaming():
+    st.session_state.streaming = True
+    st.session_state.stream_action = "start"
+    _start_sse_thread()
+
+
+def _reconnect_sse():
+    st.session_state.stream_action = "reconnect"
+    _stop_sse_thread()
+    time.sleep(0.2)
+    _start_sse_thread()
+
+
+def _restart_streaming():
+    st.session_state.stream_action = "restart"
+    _stop_sse_thread()
+    time.sleep(0.2)
+    st.session_state.streaming = True
+    _start_sse_thread()
+
+
 # ── Sidebar: System Status ─────────────────────────────────────────────────────
+def _render_sidebar_content():
+    st.markdown("## 📡 Telecom Agent")
+    st.markdown("**Taipei Arena Concert Egress**\n*Power Station — May 15, 2026*")
+    st.divider()
+
+    st.markdown("### 🔌 System Status")
+
+    payload = st.session_state.get("payload")
+    api_ready = _api_is_ready()
+    adk_ready = _adk_is_ready()
+    sse_state = _get_sse_state()
+    payload_age = time.time() - st.session_state.last_payload_received
+    sse_live = bool(payload) and payload_age < max(3.0, float(UI_REFRESH_RATE) * 3)
+
+    status_indicator(
+        "Ollama LLM",
+        "CONFIGURED" if OLLAMA_API_KEY else "MISSING KEY",
+        "green" if OLLAMA_API_KEY else "red",
+    )
+    status_indicator(
+        "SSE Streamer",
+        "ACTIVE" if sse_live else "READY" if api_ready else "OFFLINE",
+        "cyan" if api_ready else "red",
+    )
+    status_indicator(
+        "AI Orchestration",
+        "RUNNING" if sse_live else "READY" if adk_ready else "ADK OFFLINE",
+        "purple" if adk_ready else "red",
+    )
+    status_indicator(
+        "SSE Connection",
+        "LIVE" if sse_live else "CONNECTING" if st.session_state.streaming and api_ready else "OFFLINE",
+        "green" if sse_live else "orange" if st.session_state.streaming and api_ready else "red",
+    )
+
+    if sse_state.get("error") and not sse_live:
+        st.caption(f"SSE: {sse_state['error']}")
+
+    if payload:
+        status_indicator("Active Agents", "5 AGENTS", "cyan")
+
+        tick = payload.get("tick", 0)
+        ues = payload.get("active_ues", 0)
+        rate = (ues * 2) if ues else 0
+        status_indicator("Event Throughput", f"{rate} eps", "cyan")
+        status_indicator("Telemetry Ingestion", f"{tick} ticks", "cyan")
+        status_indicator("Tick Counter", f"#{tick}", "green")
+
+        st.divider()
+
+        mob = payload.get("mobility", {})
+        if mob:
+            st.markdown("### 🚇 MRT Status")
+            congestion = mob.get("overall_congestion", "GREEN")
+            color = "green" if congestion == "GREEN" else "orange" if congestion == "YELLOW" else "red"
+            status_indicator("MRT Congestion", congestion, color)
+            status_indicator("Mass Egress", "DETECTED" if mob.get("mass_egress_detected") else "STANDBY", "orange")
+            status_indicator("Walk Propensity", f"{mob.get('walking_propensity', 1.0)*100:.0f}%", "cyan")
+            status_indicator("Slip Risk", mob.get("slip_risk", "LOW"), "orange")
+
+            st.markdown("### 🚲 YouBike")
+            status_indicator("Available", f"{mob.get('youbike_available', 0)} bikes", "green")
+            status_indicator("Empty Docks", f"{mob.get('youbike_empty_docks', 0)} docks", "orange")
+
+    st.divider()
+
+    if st.session_state.streaming:
+        st.button("■ Stop Streaming", use_container_width=True, on_click=_stop_streaming)
+        if st.session_state.get("stream_action") != "stop":
+            st.button("↻ Reconnect SSE", use_container_width=True, on_click=_reconnect_sse)
+            st.button("⟳ Restart Streaming", use_container_width=True, on_click=_restart_streaming)
+    else:
+        st.button("▶ Start Streaming", type="primary", use_container_width=True, on_click=_start_streaming)
+
+    st.session_state.stream_action = None
+
+
 def render_sidebar():
     with st.sidebar:
-        st.markdown("## 📡 CovMo™ Platform")
-        st.markdown("**Taipei Arena Concert Egress**\n*Power Station — May 15, 2026*")
-        st.divider()
-
-        st.markdown("### 🔌 System Status")
-
-        payload = st.session_state.get("payload")
-        api_ready = _api_is_ready()
-        adk_ready = _adk_is_ready()
-        sse_state = _get_sse_state()
-        payload_age = time.time() - st.session_state.last_payload_received
-        sse_live = bool(payload) and payload_age < max(3.0, float(UI_REFRESH_RATE) * 3)
-
-        status_indicator(
-            "Ollama LLM",
-            "CONFIGURED" if OLLAMA_API_KEY else "MISSING KEY",
-            "green" if OLLAMA_API_KEY else "red",
-        )
-        status_indicator(
-            "SSE Streamer",
-            "ACTIVE" if sse_live else "READY" if api_ready else "OFFLINE",
-            "cyan" if api_ready else "red",
-        )
-        status_indicator(
-            "AI Orchestration",
-            "RUNNING" if sse_live else "READY" if adk_ready else "ADK OFFLINE",
-            "purple" if adk_ready else "red",
-        )
-        status_indicator(
-            "SSE Connection",
-            "LIVE" if sse_live else "CONNECTING" if st.session_state.streaming and api_ready else "OFFLINE",
-            "green" if sse_live else "orange" if st.session_state.streaming and api_ready else "red",
-        )
-
-        if sse_state.get("error") and not sse_live:
-            st.caption(f"SSE: {sse_state['error']}")
-
-        if payload:
-            status_indicator("Active Agents", "5 AGENTS", "cyan")
-
-            tick = payload.get("tick", 0)
-            ues = payload.get("active_ues", 0)
-            rate = (ues * 2) if ues else 0
-            status_indicator(f"Event Throughput", f"{rate} eps", "cyan")
-            status_indicator("Telemetry Ingestion", f"{tick} ticks", "cyan")
-            status_indicator("Tick Counter", f"#{tick}", "green")
-
-            st.divider()
-
-            # Mobility summary
-            mob = payload.get("mobility", {})
-            if mob:
-                st.markdown("### 🚇 MRT Status")
-                congestion = mob.get("overall_congestion", "GREEN")
-                color = "green" if congestion == "GREEN" else "orange" if congestion == "YELLOW" else "red"
-                status_indicator("MRT Congestion", congestion, color)
-                status_indicator("Mass Egress", "DETECTED" if mob.get("mass_egress_detected") else "STANDBY", "orange")
-                status_indicator("Walk Propensity", f"{mob.get('walking_propensity', 1.0)*100:.0f}%", "cyan")
-                status_indicator("Slip Risk", mob.get("slip_risk", "LOW"), "orange")
-
-                # YouBike
-                st.markdown("### 🚲 YouBike")
-                status_indicator("Available", f"{mob.get('youbike_available', 0)} bikes", "green")
-                status_indicator("Empty Docks", f"{mob.get('youbike_empty_docks', 0)} docks", "orange")
-
-        st.divider()
-
-        # Start/Stop controls
-        if st.session_state.streaming:
-            if st.button("■ Stop Streaming", use_container_width=True):
-                st.session_state.streaming = False
-                _stop_sse_thread()
-                st.rerun()
-            if st.button("↻ Reconnect SSE", use_container_width=True):
-                _stop_sse_thread()
-                time.sleep(0.2)
-                _start_sse_thread()
-                st.rerun()
-        else:
-            if st.button("▶ Start Streaming", type="primary", use_container_width=True):
-                st.session_state.streaming = True
-                _start_sse_thread()
-                st.rerun()
-
-        st.caption("CovMo™ GenAI Telecom Intelligence Platform v1.0")
+        _render_sidebar_content()
 
 
 # ── KPI Section ───────────────────────────────────────────────────────────────
 def render_kpi_section(kpis: dict):
     # Use the kpis argument directly — don't reassign from payload
-    cols = st.columns(7)
+    row1, row2 = st.columns(2), st.columns(5)
     metrics = [
         ("Subscriber Satisfaction", kpis.get("subscriber_satisfaction_score", 0), "cyan"),
         ("VIP QoE Score", kpis.get("vip_qoe_score", 0), "orange"),
@@ -357,7 +414,7 @@ def render_kpi_section(kpis: dict):
         ("Revenue Protection", f"${kpis.get('revenue_protection_usd', 0):.0f}", "cyan"),
         ("Mobility Pressure", kpis.get("predicted_mobility_pressure", 0), "orange"),
     ]
-    for col, (title, val, color) in zip(cols, metrics):
+    for col, (title, val, color) in zip(row1 + row2, metrics):
         with col:
             if isinstance(val, float):
                 kpi_card(title, f"{val:.1f}", color=color)
@@ -366,7 +423,11 @@ def render_kpi_section(kpis: dict):
 
 
 # ── Executive Summary ────────────────────────────────────────────────────────
-def render_executive_summary(kpis: dict):
+def render_executive_summary(kpis: dict, active_ues: int | None = None):
+    if active_ues is None:
+        payload = st.session_state.get("payload")
+        active_ues = payload.get("active_ues", 0) if payload else 0
+
     with st.expander("📊 Executive Summary", expanded=True):
         cols = st.columns(5)
         summary_items = [
@@ -374,7 +435,7 @@ def render_executive_summary(kpis: dict):
             ("Est SLA Savings", f"${kpis.get('estimated_sla_savings_usd', 0):.0f}", "orange"),
             ("AI Mitigation Success", f"{kpis.get('ai_mitigation_success_rate', 0):.1f}%", "grey"),
             ("VIP Retention Risk Reduction", f"{kpis.get('vip_retention_risk_reduction', 0):.1f}%", "purple"),
-            ("Active UEs", f"{st.session_state.payload.get('active_ues', 0) if st.session_state.payload else 0}", "cyan"),
+            ("Active UEs", f"{active_ues}", "cyan"),
         ]
         for col, (title, val, color) in zip(cols, summary_items):
             with col:
@@ -390,6 +451,218 @@ def render_executive_summary(kpis: dict):
     """, unsafe_allow_html=True)
 
 
+def _render_header():
+    st.markdown("""
+    <div style="padding: 12px 16px; background: #0D1B2A; border-bottom: 1px solid #1A2A3A; margin-top: 24px;">
+        <span style="color:#00E5FF; font-size:18px; font-weight:700; font-family:'Courier New',monospace;">
+            📡 TELECOM INTELLIGENCE PLATFORM
+        </span>
+        <br>
+        <span style="color:#B0BEC5; font-size:12px; margin-left:28px; font-family:'Courier New',monospace;">
+            Intent-Based RAN Optimization · Urban Mobility Intelligence · AI Autonomous Operations
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def _render_waiting_panel():
+    st.markdown("""
+    <div style="text-align:center; padding: 80px 20px; color:#B0BEC5; font-family:'Courier New',monospace;">
+        <div style="font-size:48px; margin-bottom:20px;">📡</div>
+        <div style="font-size:24px; color:#00E5FF; margin-bottom:10px;">CovMo™ Platform Connecting</div>
+        <div style="font-size:14px;">Waiting for the first SSE telemetry frame...</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+@st.fragment(run_every=STREAM_REFRESH_INTERVAL_SEC)
+def _render_sidebar_fragment():
+    if st.session_state.get("streaming", False):
+        _sync_live_payload()
+    _render_sidebar_content()
+
+
+@st.fragment(run_every=STREAM_REFRESH_INTERVAL_SEC)
+def _render_kpi_fragment():
+    if st.session_state.get("streaming", False):
+        _current_payload()
+    payload = st.session_state.get("payload")
+    if not payload:
+        _render_waiting_panel()
+        return
+
+    kpis = _current_kpis(payload)
+    render_kpi_section(kpis)
+    render_executive_summary(kpis, active_ues=payload.get("active_ues", 0))
+
+
+@st.fragment(run_every=STREAM_REFRESH_INTERVAL_SEC)
+def _render_operational_fragment():
+    if st.session_state.get("streaming", False):
+        _current_payload()
+    history = st.session_state.history
+
+    if not history:
+        st.info("Waiting for live telemetry charts...")
+        return
+
+    col_chart1, col_chart2 = st.columns(2)
+    with col_chart1:
+        st.plotly_chart(render_rsrp_chart(history[-80:]), use_container_width=True)
+    with col_chart2:
+        st.plotly_chart(render_sinr_chart(history[-80:]), use_container_width=True)
+
+    col_chart3, col_chart4 = st.columns(2)
+    with col_chart3:
+        st.plotly_chart(render_ta_chart(history[-80:]), use_container_width=True)
+    with col_chart4:
+        st.plotly_chart(render_prb_chart(history[-80:]), use_container_width=True)
+
+    col_chart5, col_chart6 = st.columns(2)
+    with col_chart5:
+        st.plotly_chart(render_handover_chart(history[-80:]), use_container_width=True)
+    with col_chart6:
+        st.plotly_chart(render_congestion_heatmap(history[-60:]), use_container_width=True)
+
+
+@st.fragment(run_every=MAP_REFRESH_INTERVAL_SEC)
+def _render_map_fragment():
+    if st.session_state.get("streaming", False):
+        _current_payload()
+    payload = st.session_state.get("payload")
+    if not payload:
+        st.info("Waiting for mobility telemetry...")
+        return
+
+    cells = _load_cells()
+    egress_progress = min(1.0, (payload.get("tick", 0) * 0.006))
+    telemetry = payload.get("telemetry", [])
+    render_map_st(telemetry, cells, egress_progress)
+
+    st.markdown("""
+    <div style="display:flex; gap:20px; font-family:'Courier New',monospace; font-size:11px; color:#B0BEC5; padding: 8px 0;">
+        <span>🔴 <b>RED</b> = Poor RSRP (<-105dBm)</span>
+        <span>🟠 <b>ORANGE</b> = Fair RSRP (-90 to -105dBm)</span>
+        <span>🟢 <b>GREEN</b> = Good RSRP (>-90dBm)</span>
+        <span>★ <b>VIP</b> subscribers shown larger</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+@st.fragment(run_every=STREAM_REFRESH_INTERVAL_SEC)
+def _render_ai_fragment():
+    if st.session_state.get("streaming", False):
+        _current_payload()
+    payload = st.session_state.get("payload")
+    if not payload:
+        st.info("Waiting for AI reasoning stream...")
+        return
+
+    arcs = payload.get("incident_arcs", {})
+    if arcs:
+        st.markdown("### 🎭 Active Incident Arcs")
+        incident_arc_timeline(arcs)
+        st.divider()
+
+    st.markdown("### 🔗 Event Correlation Engine")
+    correlated = payload.get("correlated_events", [])
+    if not correlated:
+        st.info("No correlated scenarios detected yet — analyzing cross-domain signals...")
+    else:
+        cols = st.columns(2)
+        for i, evt in enumerate(correlated[:6]):
+            with cols[i % 2]:
+                correlated_event_card(evt)
+    st.divider()
+
+    st.markdown("### 🔄 Agent Monitoring Escalation")
+    escalations = payload.get("monitoring_escalations", {})
+    monitoring_escalation_panel(escalations)
+    st.divider()
+
+    st.markdown("### 🤖 Multi-Agent Reasoning Console")
+    reasoning = payload.get("reasoning", [])
+    agent_reasoning_panel(reasoning)
+    st.divider()
+
+    st.markdown("### ⚡ Autonomous AI Actions (Policy-Validated)")
+    actions = payload.get("actions", [])
+    if not actions:
+        st.info("No autonomous actions triggered yet. AI is monitoring...")
+    else:
+        approved = [a for a in actions if a.get("status") in ("approved", "executed")]
+        rejected = [a for a in actions if a.get("status") == "rejected"]
+
+        if approved:
+            st.markdown(f"**Approved & Executed ({len(approved)})**")
+            for act in approved:
+                action_card(
+                    action_type=act.get("action_type", "UNKNOWN"),
+                    severity="GREEN",
+                    confidence=act.get("confidence_score", 0),
+                    reason=act.get("reason", ""),
+                    impact=act.get("expected_kpi_improvement_pct", 0),
+                    policy_approved=True,
+                    status="executed",
+                )
+
+        if rejected:
+            st.markdown(f"**Rejected by Policy Engine ({len(rejected)})**")
+            for act in rejected:
+                action_card(
+                    action_type=act.get("action_type", "UNKNOWN"),
+                    severity="RED",
+                    confidence=act.get("confidence_score", 0),
+                    reason=act.get("policy_reject_reason", act.get("reason", "")),
+                    impact=act.get("expected_kpi_improvement_pct", 0),
+                    policy_approved=False,
+                    status="rejected",
+                )
+
+    st.divider()
+    replay_controls()
+
+
+@st.fragment(run_every=STREAM_REFRESH_INTERVAL_SEC)
+def _render_subscriber_fragment():
+    if st.session_state.get("streaming", False):
+        _current_payload()
+    payload = st.session_state.get("payload")
+    if not payload:
+        st.info("Waiting for subscriber telemetry...")
+        return
+
+    st.markdown("### 📡 VIP Subscriber Analytics")
+    vips = payload.get("telemetry", [])
+    vip_telemetry = [t for t in vips if t.get("qos_class") == "VIP_Premium"]
+
+    if vip_telemetry:
+        cols = st.columns(3)
+        for i, vip in enumerate(vip_telemetry[:6]):
+            sub_data = {
+                "ue_id": vip.get("ue_id", "N/A"),
+                "qos_class": vip.get("qos_class", "VIP_Premium"),
+                "is_vip": True,
+                "frustration_index": max(0, 100 + vip.get("metrics", {}).get("rsrp", -100)),
+                "handover_count": 0 if vip.get("metrics", {}).get("handover_success", True) else 1,
+                "qoe_degradation_predicted_min": 4.0,
+            }
+            with cols[i % 3]:
+                subscriber_card(sub_data)
+    else:
+        st.info("Waiting for VIP subscriber telemetry...")
+
+    st.markdown("### 🚨 Active RAN Alerts")
+    alerts = payload.get("ran_alerts", [])
+    if not alerts:
+        st.success("✓ No active RAN alerts — all systems nominal")
+    for alert in alerts:
+        alert_banner(alert)
+
+    st.markdown("### 📋 Live Telemetry Log")
+    live_log_display(st.session_state.log_lines)
+
+
 # ── Main Layout ───────────────────────────────────────────────────────────────
 def main():
     _configure_page()
@@ -398,46 +671,13 @@ def main():
     if st.session_state.streaming:
         _start_sse_thread()
 
-    # Drain SSE payloads from background thread into session_state
     _drain_queue()
 
-    render_sidebar()
+    with st.sidebar:
+        _render_sidebar_fragment()
 
-    st.markdown("""
-    <div style="padding: 8px 16px; background: #0D1B2A; border-bottom: 1px solid #1A2A3A; margin-bottom: 8px;">
-        <span style="color:#00E5FF; font-size:18px; font-weight:700; font-family:'Courier New',monospace;">
-            📡 COVMO™ TELECOM INTELLIGENCE PLATFORM
-        </span>
-        <span style="color:#B0BEC5; font-size:12px; margin-left:20px; font-family:'Courier New',monospace;">
-            Intent-Based RAN Optimization · Urban Mobility Intelligence · AI Autonomous Operations
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    payload = st.session_state.payload
-
-    if not payload:
-        st.markdown("""
-        <div style="text-align:center; padding: 80px 20px; color:#B0BEC5; font-family:'Courier New',monospace;">
-            <div style="font-size:48px; margin-bottom:20px;">📡</div>
-            <div style="font-size:24px; color:#00E5FF; margin-bottom:10px;">CovMo™ Platform Connecting</div>
-            <div style="font-size:14px;">Waiting for the first SSE telemetry frame...</div>
-        </div>
-        """, unsafe_allow_html=True)
-        _schedule_refresh()
-        return
-
-    kpis = payload.get("telemetry", [{}])
-    # Get KPIs from telemetry service
-    from services.telemetry_service import get_kpi_snapshot
-    kpis = get_kpi_snapshot().model_dump()
-    del kpis["timestamp"]
-
-    # KPI Panel
-    render_kpi_section(kpis)
-
-    # Executive Summary
-    render_executive_summary(kpis)
+    _render_header()
+    _render_kpi_fragment()
 
     st.divider()
 
@@ -445,155 +685,17 @@ def main():
     tab_names = ["📊 Operational", "🗺️ Mobility Map", "🤖 AI Console", "📡 Subscribers"]
     tab_ops, tab_map, tab_ai, tab_sub = st.tabs(tab_names)
 
-    history = st.session_state.history
-
     with tab_ops:
-        # Row 1: RSRP + SINR charts
-        col_chart1, col_chart2 = st.columns(2)
-        with col_chart1:
-            st.plotly_chart(render_rsrp_chart(history[-80:]), use_container_width=True)
-        with col_chart2:
-            st.plotly_chart(render_sinr_chart(history[-80:]), use_container_width=True)
-
-        # Row 2: TA + PRB
-        col_chart3, col_chart4 = st.columns(2)
-        with col_chart3:
-            st.plotly_chart(render_ta_chart(history[-80:]), use_container_width=True)
-        with col_chart4:
-            st.plotly_chart(render_prb_chart(history[-80:]), use_container_width=True)
-
-        # Row 3: Handover + Heatmap
-        col_chart5, col_chart6 = st.columns(2)
-        with col_chart5:
-            st.plotly_chart(render_handover_chart(history[-80:]), use_container_width=True)
-        with col_chart6:
-            st.plotly_chart(render_congestion_heatmap(history[-60:]), use_container_width=True)
+        _render_operational_fragment()
 
     with tab_map:
-        cells = _load_cells()
-        egress_progress = min(1.0, (payload.get("tick", 0) * 0.006))
-        exit_data = payload.get("mobility", {}).get("mrt_exits", [])
-        telemetry = payload.get("telemetry", [])
-        render_map_st(telemetry, cells, egress_progress)
-
-        # Legend
-        st.markdown("""
-        <div style="display:flex; gap:20px; font-family:'Courier New',monospace; font-size:11px; color:#B0BEC5; padding: 8px 0;">
-            <span>🔴 <b>RED</b> = Poor RSRP (<-105dBm)</span>
-            <span>🟠 <b>ORANGE</b> = Fair RSRP (-90 to -105dBm)</span>
-            <span>🟢 <b>GREEN</b> = Good RSRP (>-90dBm)</span>
-            <span>★ <b>VIP</b> subscribers shown larger</span>
-        </div>
-        """, unsafe_allow_html=True)
+        _render_map_fragment()
 
     with tab_ai:
-        # ── Incident Arc Timeline ─────────────────────────────────────────────
-        arcs = payload.get("incident_arcs", {})
-        if arcs:
-            st.markdown("### 🎭 Active Incident Arcs")
-            incident_arc_timeline(arcs)
-            st.divider()
-
-        # ── Correlated Events ─────────────────────────────────────────────────
-        st.markdown("### 🔗 Event Correlation Engine")
-        correlated = payload.get("correlated_events", [])
-        if not correlated:
-            st.info("No correlated scenarios detected yet — analyzing cross-domain signals...")
-        else:
-            cols = st.columns(2)
-            for i, evt in enumerate(correlated[:6]):
-                with cols[i % 2]:
-                    correlated_event_card(evt)
-        st.divider()
-
-        # ── Continuous Monitoring ─────────────────────────────────────────────
-        st.markdown("### 🔄 Agent Monitoring Escalation")
-        escalations = payload.get("monitoring_escalations", {})
-        monitoring_escalation_panel(escalations)
-        st.divider()
-
-        # ── AI Reasoning Console ───────────────────────────────────────────────
-        st.markdown("### 🤖 Multi-Agent Reasoning Console")
-        reasoning = payload.get("reasoning", [])
-        agent_reasoning_panel(reasoning)
-        st.divider()
-
-        # ── Autonomous Actions ─────────────────────────────────────────────────
-        st.markdown("### ⚡ Autonomous AI Actions (Policy-Validated)")
-        actions = payload.get("actions", [])
-        if not actions:
-            st.info("No autonomous actions triggered yet. AI is monitoring...")
-        else:
-            approved = [a for a in actions if a.get("status") in ("approved", "executed")]
-            rejected = [a for a in actions if a.get("status") == "rejected"]
-
-            if approved:
-                st.markdown(f"**Approved & Executed ({len(approved)})**")
-                for act in approved:
-                    action_card(
-                        action_type=act.get("action_type", "UNKNOWN"),
-                        severity="GREEN",
-                        confidence=act.get("confidence_score", 0),
-                        reason=act.get("reason", ""),
-                        impact=act.get("expected_kpi_improvement_pct", 0),
-                        policy_approved=True,
-                        status="executed",
-                    )
-
-            if rejected:
-                st.markdown(f"**Rejected by Policy Engine ({len(rejected)})**")
-                for act in rejected:
-                    action_card(
-                        action_type=act.get("action_type", "UNKNOWN"),
-                        severity="RED",
-                        confidence=act.get("confidence_score", 0),
-                        reason=act.get("policy_reject_reason", act.get("reason", "")),
-                        impact=act.get("expected_kpi_improvement_pct", 0),
-                        policy_approved=False,
-                        status="rejected",
-                    )
-
-        st.divider()
-
-        # ── Incident Replay ───────────────────────────────────────────────────
-        st.markdown("### 🎬 Incident Replay")
-        replay_controls()
+        _render_ai_fragment()
 
     with tab_sub:
-        st.markdown("### 📡 VIP Subscriber Analytics")
-        vips = payload.get("telemetry", [])
-        vip_telemetry = [t for t in vips if t.get("qos_class") == "VIP_Premium"]
-
-        if vip_telemetry:
-            # Show top 6 VIP subscribers
-            cols = st.columns(3)
-            for i, vip in enumerate(vip_telemetry[:6]):
-                sub_data = {
-                    "ue_id": vip.get("ue_id", "N/A"),
-                    "qos_class": vip.get("qos_class", "VIP_Premium"),
-                    "is_vip": True,
-                    "frustration_index": max(0, 100 + vip.get("metrics", {}).get("rsrp", -100)),
-                    "handover_count": 0 if vip.get("metrics", {}).get("handover_success", True) else 1,
-                    "qoe_degradation_predicted_min": 4.0,
-                }
-                with cols[i % 3]:
-                    subscriber_card(sub_data)
-        else:
-            st.info("Waiting for VIP subscriber telemetry...")
-
-        # RAN Alerts
-        st.markdown("### 🚨 Active RAN Alerts")
-        alerts = payload.get("ran_alerts", [])
-        if not alerts:
-            st.success("✓ No active RAN alerts — all systems nominal")
-        for alert in alerts:
-            alert_banner(alert)
-
-        # Live Log
-        st.markdown("### 📋 Live Telemetry Log")
-        live_log_display(st.session_state.log_lines)
-
-    _schedule_refresh()
+        _render_subscriber_fragment()
 
 
 if __name__.startswith("streamlit"):
