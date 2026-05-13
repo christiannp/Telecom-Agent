@@ -1,22 +1,21 @@
 """
 Async telemetry streamer for CovMo Telecom Intelligence Platform.
 
-Generates synthetic UE telemetry every 500ms simulating the
+Generates synthetic UE telemetry simulating the
 Taipei Arena Concert Egress scenario (Power Station Concert, May 15, 2026).
 
 The crowd moves from Taipei Arena → Nanjing Fuxing MRT exits.
 
-INCIDENT ARCS (timeline over ~200 ticks / 100 seconds):
-  Tick   1-30   : Nominal — crowd assembles, low activity
-  Tick  30-60   : Mass egress begins, congestion rises
-  Tick  40-80   : WEATHER SPIKE — rainfall 0 → 12 mm/hr
-  Tick  50-100  : MULTI-CELL HANDOVER STORM (0.65 < phase < 0.80)
-  Tick  80-120  : VIP DEGRADATION ARC — VIPs enter MRT underground
-  Tick  100-150 : MRT OVERLOAD CASCADE — PRB > 90% at MRT DAS
-  Tick  120-160 : ANOMALY BURST — CQI drops to 2-3 across 20% of UEs
-  Tick  130-180 : SECONDARY CONGESTION — load-balancing action fires
-  Tick  150-200 : YOUBIKE STARVATION — all docks empty, frustration peaks
-  Tick  200+    : Nominal cooldown — crowd disperses, PRB recovers
+INCIDENT ARC TIMELINE (1 tick = 10 seconds, 60 ticks = 10 minutes):
+    Tick   6-12  : Weather spike — rainfall 0 → 12 mm/hr
+    Tick  12-24  : Mass egress begins, TA rising
+    Tick  24-36  : Signal Cliff + Handover Storm — RSRP drops, 30% HO failure
+    Tick  30-36  : VIP Arc — VIPs underground, RSRP < -105 dBm, QoE degrading
+    Tick  36-42  : MRT Overload — PRB > 90% at MRT DAS cell
+    Tick  42-48  : Anomaly Burst — CQI drops to 2-3 across 20% of UEs
+    Tick  48-60  : YouBike Starvation — all 60 docks empty
+    Tick  54-60  : Secondary Congestion + Peak Congestion — MRT RED, AI triggers VIP Priority Routing
+    Tick  60+    : Dispersal — crowd clears, KPIs recover
 """
 from __future__ import annotations
 
@@ -133,25 +132,32 @@ def _reset_incidents():
 
 
 def _tick_incident(tick: int) -> None:
-    """Update incident flags based on current tick."""
-    # Weather spike: tick 40-80, rainfall 0 → 12 mm/hr
-    if 40 <= tick <= 80:
+    """Update incident flags based on current tick (1 tick = 10 seconds).
+    10-minute demo window — all 7 arcs fit within 60 ticks:
+      Tick   6+   : Weather spike — rainfall 0→12 mm/hr
+      Tick  12+   : Mass egress begins
+      Tick  24-36 : Signal Cliff + Handover Storm — RSRP drops, 30% HO failure
+      Tick  30-36 : VIP Arc — VIPs underground, RSRP < -105 dBm, QoE degrading
+      Tick  36-42 : MRT Overload — PRB > 90% at MRT DAS cell
+      Tick  42-48 : Anomaly Burst — CQI drops to 2-3 across 20% of UEs
+      Tick  48-60 : YouBike Starvation — all 60 docks empty
+      Tick  54-60 : Secondary Congestion + Peak Congestion — MRT RED, AI triggers VIP Priority Routing
+      Tick  60+   : Dispersal — crowd clears, KPIs return to normal
+    """
+    if tick >= 6:
         _incident_flags["weather_spike_active"] = True
-    # Handover storm: tick 50-100 (coincides with phase 0.65-0.80)
-    if 50 <= tick <= 100:
+    if tick >= 12:
         _incident_flags["handover_storm_active"] = True
-    # VIP degradation: tick 80-120
-    if 80 <= tick <= 120:
+    if tick >= 30:
         _incident_flags["vip_degradation_active"] = True
-    # MRT overload: tick 100-150
-    if 100 <= tick <= 150:
+    if tick >= 36:
         _incident_flags["mrt_overload_active"] = True
-    # Anomaly burst: tick 120-160
-    if 120 <= tick <= 160:
+    if tick >= 42:
         _incident_flags["anomaly_burst_active"] = True
-    # YouBike starvation: tick 150-200
-    if 150 <= tick <= 200:
+    if tick >= 48:
         _incident_flags["youbike_starved"] = True
+    if tick >= 54:
+        _incident_flags["secondary_congestion_active"] = True
 
 
 # ── Weather Simulation (Dynamic) ─────────────────────────────────────────────
@@ -159,22 +165,25 @@ _weather_tick_override: dict = {}  # tick → WeatherState override
 
 
 def _compute_dynamic_weather(tick: int):
-    """Compute weather state based on tick (enables weather spike arc)."""
+    """Compute weather state based on tick (enables weather spike arc).
+
+    SCENARIO.md says: "Weather: Light rain (7.2 mm/hr), transitioning to heavy rain (12 mm/hr)"
+    At tick 0-5: base 7.2 mm/hr (light rain, pre-transition)
+    At tick 6-12: ramp 7.2 → 12 mm/hr (heavy rain spike)
+    After tick 12: tapers back to base
+    """
     from models import WeatherState
-    # Base: light rain (7.2 mm/hr)
-    base_rainfall = 7.2
-    rainfall = base_rainfall
+    base_rainfall = 7.2  # baseline light rain per SCENARIO.md
 
     if _incident_flags.get("weather_spike_active"):
-        # Spike from 0 → 12 mm/hr at tick 40, sustain, taper at tick 80
-        if tick < 40:
-            rainfall = 0.0
-        elif 40 <= tick <= 80:
-            # Linear ramp: 0 → 12 mm/hr
-            rainfall = min(12.0, (tick - 40) / 40 * 12.0)
+        # Tick 6-12: rain ramps 7.2 → 12 mm/hr (heavy rain spike)
+        if tick < 6:
+            rainfall = base_rainfall  # 7.2 mm/hr, light rain
+        elif 6 <= tick <= 12:
+            rainfall = round(7.2 + ((tick - 6) / 6) * 4.8, 1)  # 7.2 → 12 mm/hr
         else:
-            # Taper down
-            rainfall = max(7.2, 12.0 - (tick - 80) * 0.1)
+            # Taper down after tick 12 back toward base
+            rainfall = max(7.2, 12.0 - (tick - 12) * 0.25)
         rainfall = round(rainfall, 1)
 
     slip_risk = "LOW"
@@ -265,13 +274,13 @@ def _generate_single_ue_trace(
     # RSRP: -85 to -105 dBm
     base_rsrp = -88 if is_vip else -92
 
-    # Arc 1: VIP degradation (tick 80-120, underground)
+    # Arc: VIP degradation (tick 30-36) — underground penalty + VIP-specific penalty
     underground_penalty = 12 if phase > 0.75 else 0
     vip_penalty = 6 if (is_vip and _incident_flags.get("vip_degradation_active")) else 0
     rsrp_noise = random.gauss(0, 2)
     rsrp = base_rsrp - underground_penalty - vip_penalty + rsrp_noise
 
-    # Arc 2: Anomaly burst (tick 120-160) — CQI crashes for 20% of UEs
+    # Arc: Anomaly burst (tick 42-48) — CQI crashes for 20% of UEs
     cqi_base_modifier = 0
     if _incident_flags.get("anomaly_burst_active") and random.random() < 0.20:
         cqi_base_modifier = -10  # Crash CQI to 2-3
@@ -280,13 +289,16 @@ def _generate_single_ue_trace(
     base_sinr = 16 if is_vip else 12
     sinr = max(3, base_sinr - (phase * 8) + random.gauss(0, 1.5))
 
-    # Arc 3: MRT overload — PRB spikes above 90% at MRT DAS (tick 100-150)
+    # Arc: MRT overload (tick 36-42) — PRB spikes above 90% at MRT DAS
     base_prb = 45 + (phase * 35)
     if _incident_flags.get("mrt_overload_active") and phase > 0.75:
         base_prb = min(99, base_prb + 20)  # Extra 20% PRB from overload
+    # Arc: Secondary congestion (tick 54-60) — load-balancing spillover to neighbor cell
+    if _incident_flags.get("secondary_congestion_active") and phase <= 0.6:
+        base_prb = min(99, base_prb + 15)  # Neighbor cell overload from spillover
     prb = min(99, base_prb + random.gauss(0, 5))
 
-    # Arc 4: Multi-cell handover storm (tick 50-100, phase 0.65-0.80)
+    # Arc: Handover storm (tick 24-36, phase 0.65-0.80)
     base_ta = 10
     ta = int(base_ta + phase * 30 + random.gauss(0, 3))
     ta = max(1, min(63, ta))
@@ -304,8 +316,9 @@ def _generate_single_ue_trace(
     tp = max(5, base_tp * (sinr / 20) * (1 - phase * 0.3))
 
     # Handover: Arc 4 — elevated failure rate during handover storm
+    # Active around ticks 24-36 when crowd transitions underground (phase 0.65-0.80)
     ho_success = True
-    if _incident_flags.get("handover_storm_active") and 0.65 < phase < 0.80:
+    if _incident_flags.get("handover_storm_active") and 24 <= tick <= 36 and 0.65 < phase < 0.80:
         ho_success = random.random() > 0.30  # 30% failure during storm
     elif 0.65 < phase < 0.80:
         ho_success = random.random() > 0.12
@@ -358,7 +371,12 @@ def _generate_batch(tick: int) -> List[UETelemetry]:
     n = SIMULATION_DENSITY
 
     # ── Phase calculation ──────────────────────────────────────────────────
-    raw_phase = min(1.0, (tick * 0.006))
+    # phase 0.0 = at arena, 1.0 = at MRT
+    # 1 tick = 10 seconds, 60 ticks = 10 minutes total
+    #   tick 24  ≈ 22:04 (4 min), crowd approaching MRT entrance
+    #   tick 30  ≈ 22:05 (5 min), handover storm window phase 0.65
+    #   tick 36  ≈ 22:06 (6 min), peak underground — phase 0.78
+    raw_phase = min(1.0, (tick / 46.15))  # phase 0.65 ≈ tick 30
     phase_noise = lambda: random.uniform(-0.05, 0.05)
 
     # ── VIP Subscribers ──────────────────────────────────────────────────────
@@ -438,7 +456,7 @@ def _propose_and_validate_actions(
     recent_action_types = set(_action_history[-15:])
 
     # ── Action 1: VIP PRIORITY ROUTING ─────────────────────────────────────────
-    # Triggered by VIP degradation arc (tick 80+) or correlated VIP event
+    # Triggered by VIP degradation arc (tick 30-36) or correlated VIP event
     vip_event = next(
         (e for e in correlated_events
          if e.get("scenario_label") == "VIP_QOE_DEGRADATION_RISK"),
@@ -462,15 +480,14 @@ def _propose_and_validate_actions(
         _last_vip_breach_tick = tick
 
     # ── Action 2: TEMPORARY LOAD BALANCING ────────────────────────────────────
-    # Triggered by MRT overload arc or PRB congestion event
+    # Triggered by MRT overload arc (tick 36-42) or PRB congestion event
     prb_event = next(
         (e for e in correlated_events
          if e.get("scenario_label") == "PRB_CELL_CONGESTION"),
         None
     )
     mass_egress = mobility_state.get("mass_egress_detected", False)
-    if (prb_event or (mass_egress and tick > 50)) and \
-            "TEMPORARY_LOAD_BALANCING" not in recent_action_types:
+    if (prb_event or mass_egress) and "TEMPORARY_LOAD_BALANCING" not in recent_action_types:
         action = _build_action_proposal(
             tick=tick,
             reason=(
@@ -766,6 +783,17 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
     Yields dicts with keys:
       telemetry, ran_alerts, mobility, weather, correlated_events,
       reasoning, actions, monitoring_escalations, active_ues, tick
+
+    INCIDENT ARC TIMELINE (1 tick = 10 seconds, 60 ticks = 10 minutes):
+      Tick   6-12  : Weather spike — rainfall 0 → 12 mm/hr
+      Tick  12-24  : Mass egress begins, TA rising
+      Tick  24-36  : Signal Cliff + Handover Storm — RSRP drops, 30% HO failure
+      Tick  30-36  : VIP Arc — VIPs underground, RSRP < -105 dBm, QoE degrading
+      Tick  36-42  : MRT Overload — PRB > 90% at MRT DAS cell
+      Tick  42-48  : Anomaly Burst — CQI drops to 2-3 across 20% of UEs
+      Tick  48-60  : YouBike Starvation — all 60 docks empty
+      Tick  54-60  : Secondary Congestion + Peak Congestion — MRT RED, AI triggers VIP Priority Routing
+      Tick  60+    : Dispersal — crowd clears, KPIs recover
     """
     global _tick, _is_streaming, _reasoning_log, _recent_actions
     global _ran_alerts, _active_monitors, _last_red_alert_tick
@@ -784,16 +812,12 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
 
     while _is_streaming:
         _tick += 1
-        _tick_incident(_tick)  # Update incident flags
+        _tick_incident(_tick)
 
-        # ── Weather (dynamic, supports spike arc) ────────────────────────────
         weather = _compute_dynamic_weather(_tick)
-
-        # ── Telemetry generation ──────────────────────────────────────────────
         telemetry_batch = _generate_batch(_tick)
         _update_service_telemetry(telemetry_batch)
 
-        # ── RAN alerts ───────────────────────────────────────────────────────
         ran_alerts = analyze_ran_state(telemetry_batch)
         _ran_alerts = [
             {
@@ -806,14 +830,10 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
             for a in ran_alerts
         ]
 
-        # ── Mobility ─────────────────────────────────────────────────────────
         mobility = analyze_mobility(telemetry_batch, weather, crowd_size=1500, tick=_tick)
         mobility_dict = mobility.model_dump(mode="json")
-
-        # ── Correlated Events (wired into stream) ────────────────────────────
         correlated_events = _compute_correlated_events(telemetry_batch, mobility, weather)
 
-        # ── AI Agent Analysis (every 5 ticks to manage cost) ─────────────────
         adk_output = None
         if ADK_RUNNER_AVAILABLE and _tick % 5 == 0:
             try:
@@ -833,9 +853,8 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
                     correlated_events=correlated_events,
                 )
             except Exception:
-                pass  # Degrade gracefully — ADK call failed, use fallback
+                pass
 
-        # ── Reasoning entry (ADK or deterministic fallback) ────────────────
         reasoning_entry = _build_reasoning_entry(
             _tick, adk_output, correlated_events, _recent_actions, {}
         )
@@ -843,7 +862,6 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
         if len(_reasoning_log) > 50:
             _reasoning_log = _reasoning_log[-50:]
 
-        # Store in agent memory service
         try:
             store_agent_reasoning(
                 agent_name="intent_orchestration_agent",
@@ -856,19 +874,15 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
         except Exception:
             pass
 
-        # ── Autonomous Actions (policy-validated lifecycle) ──────────────────
         if _tick % 10 == 0:
             _recent_actions = _propose_and_validate_actions(
                 _tick, _ran_alerts, mobility_dict, correlated_events
             )
 
-        # ── Continuous Monitoring Loop ─────────────────────────────────────
         escalations = _check_monitoring_escalation(
             _tick, _ran_alerts, mobility_dict, correlated_events
         )
 
-        # ── Incident Replay Snapshots ────────────────────────────────────────
-        # Save at: first RED alert, VIP breach, mass egress, after actions
         has_red = any(a.get("severity") == "RED" for a in _ran_alerts)
         has_vip_breach = any(
             e.get("scenario_label") == "VIP_QOE_DEGRADATION_RISK"
@@ -877,9 +891,10 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
         mass_egress = mobility_dict.get("mass_egress_detected", False)
         has_executed_action = any(a.executed for a in _recent_actions)
 
-        if (has_red and _tick - _last_red_alert_tick >= 15) or \
-                (has_vip_breach and _tick - _last_vip_breach_tick >= 20) or \
-                (mass_egress and _tick - _last_mass_egress_tick >= 25) or \
+        # Debounce windows for 60-tick (10-minute) scenario
+        if (has_red and _tick - _last_red_alert_tick >= 6) or \
+                (has_vip_breach and _tick - _last_vip_breach_tick >= 6) or \
+                (mass_egress and _tick - _last_mass_egress_tick >= 8) or \
                 has_executed_action:
             _save_incident_snapshot(
                 _tick,
@@ -895,7 +910,6 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
             if mass_egress:
                 _last_mass_egress_tick = _tick
 
-        # ── Yield SSE Payload ────────────────────────────────────────────────
         payload = {
             "tick": _tick,
             "timestamp": datetime.now().isoformat(),
@@ -915,8 +929,6 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
         }
 
         yield payload
-
-        # ── Tick interval ───────────────────────────────────────────────────
         await asyncio.sleep(TELEMETRY_INTERVAL_MS / 1000.0)
 
 

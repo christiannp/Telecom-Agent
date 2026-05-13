@@ -12,7 +12,7 @@
 
 ### Key Capabilities
 
-- 🔴 **Real-time Level-2 RAN Telemetry** — RSRP, SINR, TA, PRB, CQI streaming at 500ms intervals
+- 🔴 **Real-time Level-2 RAN Telemetry** — RSRP, SINR, TA, PRB, CQI streaming at 1-tick / 10-second intervals
 - 🤖 **Multi-Agent AI Orchestration** — 5 specialist agents coordinated via Google ADK
 - 🗺️ **Urban Mobility Digital Twin** — Taipei Arena → Nanjing Fuxing MRT crowd simulation
 - ⚡ **Autonomous Optimization** — Policy-validated AI actions with 85%+ confidence threshold
@@ -101,17 +101,17 @@ See [GETTING_STARTED.md](GETTING_STARTED.md) for full instructions.
 
 The **Taipei Arena Power Station Concert Egress** (May 15, 2026, 22:00) simulates ~1,500 subscribers exiting a concert under heavy rain (0→12 mm/hr). The crowd funnels toward the Nanjing Fuxing MRT, creating a cascading network crisis across 7 incident arcs:
 
-| Arc | Trigger | Autonomous Response |
-|-----|---------|---------------------|
-| **VIP Degradation** | VIP RSRP < −105 dBm underground | VIP Priority Routing approved at 92% confidence |
-| **MRT Overload Cascade** | MRT DAS cell PRB > 90% | Temporary Load Balancing triggered |
-| **Weather Transition** | Rain spikes 0→12 mm/hr at tick ~50 | MRT capacity reallocation + slip-risk alert |
-| **Handover Storm** | Underground transition phase 0.65–0.80 | Micro-cell Handover + DAS steering |
-| **Anomaly Burst** | 20% UEs with CQI 2–3 for 10 ticks | `get_anomaly_report()` + diagnostic scan |
-| **YouBike Starvation** | All 60 docks empty | Frustration index + MRT pressure alert |
-| **Secondary Congestion** | Neighboring cell PRB > 85% from load-balance | Action blocked, alternative path proposed |
+| Arc | Trigger | Tick | Autonomous Response |
+|-----|---------|------|---------------------|
+| **VIP Degradation** | VIP RSRP < −105 dBm underground | 30–36 | VIP Priority Routing approved at ≥85% confidence |
+| **MRT Overload Cascade** | MRT DAS cell PRB > 90% | 36–42 | Temporary Load Balancing triggered |
+| **Weather Transition** | Rain spikes 0→12 mm/hr | 6–12 | MRT capacity reallocation + slip-risk alert |
+| **Handover Storm** | Underground transition phase 0.65–0.80 | 24–36 | Micro-cell Handover + DAS steering |
+| **Anomaly Burst** | 20% UEs with CQI 2–3 | 42–48 | `get_anomaly_report()` + diagnostic scan |
+| **YouBike Starvation** | All 60 docks empty | 48–60 | Frustration index + MRT pressure alert |
+| **Secondary Congestion** | Neighboring cell PRB > 85% from load-balance | 54–60 | Action blocked, alternative path proposed |
 
-All 7 arcs hit within a 20-minute window, stress-testing the multi-agent system under realistic cascading conditions — weather shifts, underground signal decay, VIP SLA breaches, and policy loop conflicts.
+All 7 arcs hit within a **10-minute window**, stress-testing the multi-agent system under realistic cascading conditions — weather shifts, underground signal decay, VIP SLA breaches, and policy loop conflicts.
 
 See [SCENARIO.md](SCENARIO.md) for full timeline and trigger details.
 

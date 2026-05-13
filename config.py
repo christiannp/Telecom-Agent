@@ -29,9 +29,9 @@ LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/minimax-m2.5:cloud")
 #LM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/glm-5:cloud")
 
 # ── Simulation ─────────────────────────────────────────────────────────────
-TELEMETRY_INTERVAL_MS: int = int(os.getenv("TELEMETRY_INTERVAL_MS", "500"))
+TELEMETRY_INTERVAL_MS: int = int(os.getenv("TELEMETRY_INTERVAL_MS", "10000"))  # 1 tick = 10 seconds
 SIMULATION_DENSITY: int = int(os.getenv("SIMULATION_DENSITY", "15"))  # UEs per tick
-UI_REFRESH_RATE: int = int(os.getenv("UI_REFRESH_RATE", "1"))  # seconds
+UI_REFRESH_RATE: int = int(os.getenv("UI_REFRESH_RATE", "8"))  # seconds — must be ≤ TELEMETRY_INTERVAL_MS/1000
 
 # ── RAN Thresholds ─────────────────────────────────────────────────────────
 CONGESTION_THRESHOLD_PRB: int = int(os.getenv("CONGESTION_THRESHOLD_PRB", "80"))
