@@ -233,26 +233,54 @@ def agent_reasoning_panel(entries: list) -> None:
         st.info("No reasoning entries yet. Streaming will begin shortly...")
         return
 
+    import html
+
     lines_html = ""
     for entry in entries[-20:]:  # Show last 20 entries
         color = COLORS.get(entry.get("color", "cyan"), COLORS["cyan"])
-        agent = entry.get("agent_name", "Unknown")
-        agent_type = entry.get("agent_type", "")
-        reasoning = entry.get("reasoning", "")
-        confidence = entry.get("confidence", 85.0)
+        agent = html.escape(str(entry.get("agent_name", "Unknown")))
+        agent_type = html.escape(str(entry.get("agent_type", "")))
+        reasoning = html.escape(str(entry.get("reasoning", "")))
+        confidence = float(entry.get("confidence", 85.0))
+        triggered_action = entry.get("triggered_action")
         ts = entry.get("timestamp", "")[:19]
+
+        action_html = ""
+        if triggered_action:
+            action_html = f"""
+            <div style="margin-top:4px;">
+                <span style="
+                    display:inline-block;
+                    background:{color}20;
+                    border:1px solid {color}60;
+                    border-radius:4px;
+                    padding:1px 8px;
+                    font-size:10px;
+                    color:{color};
+                    font-family:'Courier New',monospace;
+                    text-transform:uppercase;
+                    letter-spacing:0.5px;
+                ">⚡ {html.escape(str(triggered_action))}</span>
+            </div>"""
+
+        # Confidence bar: fill bar proportional to confidence
+        bar_pct = min(100, max(0, confidence))
+        bar_color = COLORS["green"] if confidence >= 75 else COLORS["orange"] if confidence >= 50 else COLORS["red"]
 
         lines_html += f"""
         <div style="
             border-left: 3px solid {color};
-            margin: 4px 0;
-            padding: 6px 12px;
+            margin: 5px 0;
+            padding: 8px 12px;
             background: #0D1B2A;
             border-radius: 4px;
+            border-top: 1px solid {color}20;
+            border-right: 1px solid {color}20;
+            border-bottom: 1px solid {color}20;
         ">
-            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="color:{color}; font-family:'Courier New',monospace; font-size:12px; font-weight:700;">
-                    [{agent_type}] {agent}
+                    [{agent_type}]&nbsp;{agent}
                 </span>
                 <span style="color:{COLORS['grey']}; font-family:'Courier New',monospace; font-size:10px;">
                     {ts}
@@ -261,38 +289,33 @@ def agent_reasoning_panel(entries: list) -> None:
             <div style="color:#E0E0E0; font-family:'Courier New',monospace; font-size:11px; line-height:1.5;">
                 {reasoning}
             </div>
-            <div style="color:{COLORS['grey']}; font-family:'Courier New',monospace; font-size:10px; margin-top:4px;">
-                Confidence: {confidence:.1f}%
+            {action_html}
+            <div style="margin-top:5px; display:flex; align-items:center; gap:8px;">
+                <span style="color:{COLORS['grey']}; font-family:'Courier New',monospace; font-size:10px; min-width:80px;">
+                    Conf: {confidence:.1f}%
+                </span>
+                <div style="flex:1; height:4px; background:#1A2A3A; border-radius:2px; overflow:hidden;">
+                    <div style="width:{bar_pct:.0f}%; height:100%; background:{bar_color}; border-radius:2px;"></div>
+                </div>
             </div>
-        </div>
-        """
+        </div>"""
 
-    html = f"""
-    <style>
-    .reasoning-container {{
-        background: #0A1428;
-        border: 1px solid {COLORS['border']};
-        border-radius: 8px;
-        padding: 8px;
-        max-height: 400px;
-        overflow-y: auto;
-    }}
-    .reasoning-container::-webkit-scrollbar {{
-        width: 6px;
-    }}
-    .reasoning-container::-webkit-scrollbar-track {{
-        background: #0A1428;
-    }}
-    .reasoning-container::-webkit-scrollbar-thumb {{
-        background: {COLORS['cyan']}60;
-        border-radius: 3px;
-    }}
-    </style>
-    <div class="reasoning-container">
+    container_style = f"""
+        background:#0A1428;
+        border:1px solid {COLORS['border']};
+        border-radius:8px;
+        padding:8px;
+        max-height:420px;
+        overflow-y:auto;
+    """
+
+    st.html(f"""
+    <div style="{container_style}">
         {lines_html}
     </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    <style>
+    </style>
+    """)
 
 
 # ── Subscriber Card ─────────────────────────────────────────────────────────

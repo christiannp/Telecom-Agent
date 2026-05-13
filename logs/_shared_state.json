@@ -1,0 +1,12 @@
+{
+  "tick": 878,
+  "status": "streaming",
+  "active_ues": 90,
+  "subscriber_satisfaction_score": 52.34,
+  "vip_qoe_score": 45.31,
+  "congestion_risk": 100.0,
+  "ai_confidence": 90.0,
+  "sla_health": 48.82,
+  "predicted_mobility_pressure": 100.0,
+  "timestamp": "2026-05-13T23:41:21.034995"
+}

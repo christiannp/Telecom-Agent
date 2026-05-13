@@ -16,6 +16,7 @@ from services import (
     predict_mrt_overload as predict_mrt_overload_service,
     validate_action,
 )
+from services.telemetry_service import read_shared_state
 
 
 # ── Tool: Get RAN State ───────────────────────────────────────────────────────
@@ -490,9 +491,13 @@ async def correlate_events_tool() -> dict:
     vip_count = sum(1 for t in telemetry if t.qos_class.value == "VIP_Premium")
     vip_ratio = vip_count / len(telemetry) if telemetry else 0.0
 
-    # Calculate average PRB congestion
+    # Calculate average PRB congestion (overall + MRT DAS cell)
     prb_vals = [t.metrics.prb_utilization for t in telemetry]
     avg_prb = sum(prb_vals) / len(prb_vals) if prb_vals else 0.0
+
+    mrt_prb_vals = [t.metrics.prb_utilization for t in telemetry
+                    if t.cell_id == "TW_TPE_MRT_NS_01"]
+    mrt_avg_prb = sum(mrt_prb_vals) / len(mrt_prb_vals) if mrt_prb_vals else 0.0
 
     events = correlate_events(
         telemetry_batch=telemetry,
@@ -500,6 +505,8 @@ async def correlate_events_tool() -> dict:
         weather_state=weather,
         vip_density_ratio=vip_ratio,
         congestion_prb_pct=avg_prb,
+        mrt_prb_pct=mrt_avg_prb,
+        tick=state["tick"],
     )
 
     return {
@@ -655,6 +662,32 @@ def run_monitoring_check(
     Returns escalation level, label, and alert metadata.
     """
     return check_monitoring(agent_name, alert_type, severity)
+
+
+def get_live_status() -> dict:
+    """
+    Return the live simulation status including tick and KPIs.
+    Reads the shared state file written by the streamer process so this
+    tool always returns the correct tick even when running in the ADK web
+    subprocess (separate from the streamer's process).
+
+    Skill: CONTEXTUAL_AWARENESS
+    """
+
+    shared = read_shared_state()
+    return {
+        "status": shared.get("status", "idle"),
+        "tick": shared.get("tick", 0),
+        "active_ues": shared.get("active_ues", 0),
+        "subscriber_satisfaction_score": shared.get("subscriber_satisfaction_score", 0.0),
+        "vip_qoe_score": shared.get("vip_qoe_score", 0.0),
+        "congestion_risk": shared.get("congestion_risk", 0.0),
+        "ai_confidence": shared.get("ai_confidence", 0.0),
+        "sla_health": shared.get("sla_health", 0.0),
+        "predicted_mobility_pressure": shared.get("predicted_mobility_pressure", 0.0),
+        "timestamp": shared.get("timestamp", ""),
+        "simulation_active": shared.get("tick", 0) > 0,
+    }
 
 
 def stop_continuous_monitoring(agent_name: str) -> dict:

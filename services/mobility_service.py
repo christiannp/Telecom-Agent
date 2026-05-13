@@ -71,7 +71,7 @@ def analyze_mobility(
 
     # Simulation tick progression: crowd gradually moves toward MRT
     # TA increases over time as crowd approaches MRT
-    egress_progress = min(1.0, (tick * 0.008))  # 8% progress per tick
+    egress_progress = min(1.0, (tick * 0.012))  # 12% progress per tick → ~72% by tick 60
     crowd_near_mrt = int(crowd_size * egress_progress * 0.8)
     crowd_at_arena = int(crowd_size * (1 - egress_progress) * 0.8)
 
@@ -104,10 +104,12 @@ def analyze_mobility(
         ))
 
     # ── Overall MRT Congestion ────────────────────────────────────────────
+    # Tick-accurate thresholds: RED ≥ 550 (~tick 36+), YELLOW ≥ 300 (~tick 12+)
+    # With egress_progress = tick * 0.012:  tick 36 → 43%, tick 54 → 65%, tick 60 → 72%
     total_exit_load = sum(exit_loads)
-    if total_exit_load > 700:
+    if total_exit_load > 550:
         overall = "RED"
-    elif total_exit_load > 400:
+    elif total_exit_load > 300:
         overall = "YELLOW"
     else:
         overall = "GREEN"

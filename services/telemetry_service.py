@@ -1,7 +1,9 @@
 """Telemetry Service for CovMo Telecom Intelligence Platform."""
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from models import (
@@ -11,6 +13,51 @@ from models import (
     QoSClass,
 )
 from config import SIMULATION_DENSITY
+
+# ── Cross-process shared state ───────────────────────────────────────────────
+# Written by the streamer process; read by the ADK web subprocess so it
+# always sees the live simulation tick even when running in a separate process.
+_SHARED_STATE_FILE = Path(__file__).parent.parent / "logs" / "_shared_state.json"
+_SHARED_STATE_FILE.parent.mkdir(exist_ok=True)
+
+
+def write_shared_state(
+    tick: int,
+    kpis: "KPIState",
+    active_ues: int,
+    status: str = "streaming",
+) -> None:
+    """Write current state to a JSON file readable by cross-process consumers."""
+    try:
+        _SHARED_STATE_FILE.write_text(
+            json.dumps(
+                {
+                    "tick": tick,
+                    "status": status,
+                    "active_ues": active_ues,
+                    "subscriber_satisfaction_score": kpis.subscriber_satisfaction_score,
+                    "vip_qoe_score": kpis.vip_qoe_score,
+                    "congestion_risk": kpis.congestion_risk,
+                    "ai_confidence": kpis.ai_confidence,
+                    "sla_health": kpis.sla_health,
+                    "predicted_mobility_pressure": kpis.predicted_mobility_pressure,
+                    "timestamp": datetime.now().isoformat(),
+                },
+                indent=2,
+            )
+        )
+    except Exception:
+        pass  # Non-critical — never crash the simulation over a stale file write
+
+
+def read_shared_state() -> Dict:
+    """Read the last state written by the streamer process."""
+    try:
+        if _SHARED_STATE_FILE.exists():
+            return json.loads(_SHARED_STATE_FILE.read_text())
+    except Exception:
+        pass
+    return {"tick": 0, "status": "idle", "active_ues": 0}
 
 
 # ── Global State ─────────────────────────────────────────────────────────────
@@ -66,6 +113,9 @@ def update_telemetry(telemetry_batch: List[UETelemetry]) -> None:
 
     # Update KPIs
     _kpi_state = _calculate_kpis(telemetry_batch, _tick)
+
+    # Cross-process sync: write live state so the ADK subprocess sees it
+    write_shared_state(_tick, _kpi_state, len(telemetry_batch))
 
 
 def _update_frustration(sub: Subscriber, te: UETelemetry) -> None:
@@ -142,11 +192,19 @@ def _calculate_kpis(batch: List[UETelemetry], tick: int) -> KPIState:
 
 
 def get_current_state() -> Dict:
-    """Return full system state snapshot for the dashboard."""
+    """
+    Return full system state snapshot for the dashboard and ADK tools.
+
+    The tick is ALWAYS read from the shared state file so that the ADK web
+    subprocess (which has its own copy of module globals) sees the live
+    simulation tick rather than its own stale _tick=0.
+    """
+    shared = read_shared_state()
+    live_tick = shared.get("tick", _tick)
     return {
         "kpis": _kpi_state,
-        "active_ues": len(_latest_telemetry),
-        "tick": _tick,
+        "active_ues": shared.get("active_ues", len(_latest_telemetry)),
+        "tick": live_tick,
         "telemetry": _latest_telemetry,
         "subscribers": _subscribers,
         "history": _telemetry_history[-100:],

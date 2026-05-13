@@ -62,6 +62,7 @@ from tools import (
     run_monitoring_check,
     stop_continuous_monitoring,
     get_monitoring_status,
+    get_live_status,          # cross-process live tick + KPI reader
 )
 
 
@@ -137,6 +138,7 @@ ORCHESTRATOR_TOOLS = [
     get_replay_status,
     stop_continuous_monitoring,
     get_monitoring_status,
+    get_live_status,          # live tick + KPI read across ADK subprocess boundary
 ]
 
 
@@ -445,7 +447,7 @@ Tools intentionally NOT owned by root:
 - Action validation and execution → delegate to Policy Validation
 
 MANDATORY ORCHESTRATION WORKFLOW (execute every user query):
-1. Classify the user intent and delegate to the relevant specialist agent(s).
+1. ALWAYS call get_live_status() FIRST to know the current simulation tick and live KPIs — this is critical because the ADK subprocess runs in a separate process and must read the shared state file to get the real tick. Never assume tick=0 or "idle" state.
 2. For cross-domain incidents, delegate in this order: Context → Mobility → RAN → Policy.
 3. Call get_reasoning_log() and get_memory(agent_name="...") for relevant specialists.
 4. If an autonomous action is proposed, send it to Policy Validation before presenting it as executable.

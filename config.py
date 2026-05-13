@@ -30,13 +30,13 @@ LLM_MODEL: str = os.getenv("LLM_MODEL", "ollama_chat/minimax-m2.5:cloud")
 
 # ── Simulation ─────────────────────────────────────────────────────────────
 TELEMETRY_INTERVAL_MS: int = int(os.getenv("TELEMETRY_INTERVAL_MS", "10000"))  # 1 tick = 10 seconds
-SIMULATION_DENSITY: int = int(os.getenv("SIMULATION_DENSITY", "15"))  # UEs per tick
-UI_REFRESH_RATE: int = int(os.getenv("UI_REFRESH_RATE", "8"))  # seconds — must be ≤ TELEMETRY_INTERVAL_MS/1000
+SIMULATION_DENSITY: int = int(os.getenv("SIMULATION_DENSITY", "25"))  # UEs per tick  (1500 total / 60 ticks)
+UI_REFRESH_RATE: int = int(os.getenv("UI_REFRESH_RATE", "4"))  # seconds — must be ≤ TELEMETRY_INTERVAL_MS/1000
 
 # ── RAN Thresholds ─────────────────────────────────────────────────────────
-CONGESTION_THRESHOLD_PRB: int = int(os.getenv("CONGESTION_THRESHOLD_PRB", "80"))
+CONGESTION_THRESHOLD_PRB: int = int(os.getenv("CONGESTION_THRESHOLD_PRB", "90"))  # MRT Overload Arc trigger
 CONFIDENCE_THRESHOLD: int = int(os.getenv("CONFIDENCE_THRESHOLD", "85"))
-MASS_EGRESS_TA_PCT: float = float(os.getenv("MASS_EGRESS_TA_PCT", "0.70"))
+MASS_EGRESS_TA_PCT: float = float(os.getenv("MASS_EGRESS_TA_PCT", "0.60"))  # Handover Storm fires at tick 24–36 (phase 0.40–0.60)
 SIGNAL_CLIFF_DB: float = float(os.getenv("SIGNAL_CLIFF_DB", "15.0"))
 MASS_EGRESS_SINR: float = float(os.getenv("MASS_EGRESS_SINR", "8.0"))
 

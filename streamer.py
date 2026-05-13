@@ -94,6 +94,12 @@ _last_vip_breach_tick: int = -999
 _last_mass_egress_tick: int = -999
 _action_history: list[str] = []  # for loop detection in policy engine
 
+# ── Per-UE Cross-Tick State (for ta_rising_pct computation) ─────────────────
+# Tracks the last TA value per UE across ticks for egress detection.
+_ue_last_ta: dict[str, int] = {}
+# Rolling AoA variance to smooth multi-path detection.
+_aoa_history: list[float] = []
+
 
 # ── Subscriber Pool ───────────────────────────────────────────────────────────
 _VIP_IDS = [f"VIP_{i:03d}" for i in range(1, 16)]  # 15 VIP subscribers
@@ -112,7 +118,7 @@ def _reset_incidents():
     """Reset all incident state at stream start."""
     global _incident_flags, _active_monitors, _last_snapshot_tick
     global _last_red_alert_tick, _last_vip_breach_tick, _last_mass_egress_tick
-    global _action_history
+    global _action_history, _ue_last_ta, _aoa_history
     _incident_flags = {
         "weather_spike_active": False,
         "handover_storm_active": False,
@@ -129,6 +135,8 @@ def _reset_incidents():
     _last_vip_breach_tick = -999
     _last_mass_egress_tick = -999
     _action_history.clear()
+    _ue_last_ta.clear()
+    _aoa_history.clear()
 
 
 def _tick_incident(tick: int) -> None:
@@ -146,7 +154,7 @@ def _tick_incident(tick: int) -> None:
     """
     if tick >= 6:
         _incident_flags["weather_spike_active"] = True
-    if tick >= 12:
+    if tick >= 24:
         _incident_flags["handover_storm_active"] = True
     if tick >= 30:
         _incident_flags["vip_degradation_active"] = True
@@ -165,24 +173,20 @@ _weather_tick_override: dict = {}  # tick → WeatherState override
 
 
 def _compute_dynamic_weather(tick: int):
-    """Compute weather state based on tick (enables weather spike arc).
-
-    SCENARIO.md says: "Weather: Light rain (7.2 mm/hr), transitioning to heavy rain (12 mm/hr)"
-    At tick 0-5: base 7.2 mm/hr (light rain, pre-transition)
-    At tick 6-12: ramp 7.2 → 12 mm/hr (heavy rain spike)
-    After tick 12: tapers back to base
-    """
+    """Compute weather state based on tick (enables weather spike arc)."""
     from models import WeatherState
-    base_rainfall = 7.2  # baseline light rain per SCENARIO.md
+    # Base: light rain (7.2 mm/hr)
+    base_rainfall = 7.2
+    rainfall = base_rainfall
 
     if _incident_flags.get("weather_spike_active"):
-        # Tick 6-12: rain ramps 7.2 → 12 mm/hr (heavy rain spike)
+        # Tick 6-12: spike 0 → 12 mm/hr over 6 ticks (1 min); tapers after
         if tick < 6:
-            rainfall = base_rainfall  # 7.2 mm/hr, light rain
+            rainfall = 0.0
         elif 6 <= tick <= 12:
-            rainfall = round(7.2 + ((tick - 6) / 6) * 4.8, 1)  # 7.2 → 12 mm/hr
+            rainfall = round(((tick - 6) / 6) * 12.0, 1)
         else:
-            # Taper down after tick 12 back toward base
+            # Taper down after tick 12
             rainfall = max(7.2, 12.0 - (tick - 12) * 0.25)
         rainfall = round(rainfall, 1)
 
@@ -293,9 +297,12 @@ def _generate_single_ue_trace(
     base_prb = 45 + (phase * 35)
     if _incident_flags.get("mrt_overload_active") and phase > 0.75:
         base_prb = min(99, base_prb + 20)  # Extra 20% PRB from overload
-    # Arc: Secondary congestion (tick 54-60) — load-balancing spillover to neighbor cell
-    if _incident_flags.get("secondary_congestion_active") and phase <= 0.6:
-        base_prb = min(99, base_prb + 15)  # Neighbor cell overload from spillover
+    # Arc: Secondary congestion (tick 54-60) — spillover hits both neighbor cells AND MRT DAS
+    if _incident_flags.get("secondary_congestion_active"):
+        if phase <= 0.6:
+            base_prb = min(99, base_prb + 15)  # Neighbor cell overload from spillover
+        elif phase > 0.75:
+            base_prb = min(99, base_prb + 10)  # MRT DAS peak congestion (tick 54+)
     prb = min(99, base_prb + random.gauss(0, 5))
 
     # Arc: Handover storm (tick 24-36, phase 0.65-0.80)
@@ -315,13 +322,13 @@ def _generate_single_ue_trace(
         base_tp = random.uniform(40, 90)
     tp = max(5, base_tp * (sinr / 20) * (1 - phase * 0.3))
 
-    # Handover: Arc 4 — elevated failure rate during handover storm
-    # Active around ticks 24-36 when crowd transitions underground (phase 0.65-0.80)
+    # Handover: Arc 4 — elevated failure rate during handover storm (tick 24–36)
+    # Active when crowd transitions underground (phase 0.55–0.80, matching SCENARIO.md)
     ho_success = True
-    if _incident_flags.get("handover_storm_active") and 24 <= tick <= 36 and 0.65 < phase < 0.80:
-        ho_success = random.random() > 0.30  # 30% failure during storm
-    elif 0.65 < phase < 0.80:
-        ho_success = random.random() > 0.12
+    if 24 <= tick <= 36 and 0.55 <= phase <= 0.80:
+        ho_success = random.random() > 0.30  # 30% failure rate per SCENARIO.md
+    elif 0.65 <= phase <= 0.80:
+        ho_success = random.random() > 0.02  # 2% baseline (normal handover zone)
     else:
         ho_success = random.random() > 0.02
 
@@ -630,12 +637,23 @@ def _compute_correlated_events(
     telemetry_batch: List[UETelemetry],
     mobility_state,
     weather_state,
+    tick: int,
+    cross_tick_ta_rising_pct: float,
+    avg_aoa_variance: float,
+    mrt_cell_id: str = "TW_TPE_MRT_NS_01",
 ) -> List[dict]:
     """Compute correlated events using the RAN service correlation engine."""
     vip_count = sum(1 for t in telemetry_batch if t.qos_class == QoSClass.VIP_PREMIUM)
     vip_ratio = vip_count / len(telemetry_batch) if telemetry_batch else 0.0
+
+    # Overall batch average (used for general congestion)
     prb_vals = [t.metrics.prb_utilization for t in telemetry_batch]
     avg_prb = sum(prb_vals) / len(prb_vals) if prb_vals else 0.0
+
+    # MRT DAS cell average — used for MRT-specific PRB_CELL_CONGESTION trigger
+    mrt_prb_vals = [t.metrics.prb_utilization for t in telemetry_batch
+                    if t.cell_id == mrt_cell_id]
+    mrt_avg_prb = sum(mrt_prb_vals) / len(mrt_prb_vals) if mrt_prb_vals else 0.0
 
     events = correlate_events(
         telemetry_batch=telemetry_batch,
@@ -643,6 +661,10 @@ def _compute_correlated_events(
         weather_state=weather_state,
         vip_density_ratio=vip_ratio,
         congestion_prb_pct=avg_prb,
+        mrt_prb_pct=mrt_avg_prb,
+        tick=tick,
+        cross_tick_ta_rising_pct=cross_tick_ta_rising_pct,
+        avg_aoa_variance=avg_aoa_variance,
     )
 
     return [e.model_dump(mode="json") for e in events]
@@ -830,23 +852,47 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
             for a in ran_alerts
         ]
 
+        # ── Update cross-tick state for scenario detection ──────────────────
+        # Per-UE TA rising: compare each UE's TA vs its previous tick value.
+        ta_rising_count = 0
+        for ue in telemetry_batch:
+            prev_ta = _ue_last_ta.get(ue.ue_id, ue.metrics.ta)
+            if ue.metrics.ta > prev_ta:
+                ta_rising_count += 1
+            _ue_last_ta[ue.ue_id] = ue.metrics.ta
+        cross_tick_ta_rising_pct = ta_rising_count / len(telemetry_batch) if telemetry_batch else 0.0
+
+        # Rolling AoA variance (smoothed over last 3 ticks) for multi-path detection.
+        aoa_vals = [t.metrics.aoa for t in telemetry_batch]
+        import statistics as _stats
+        if aoa_vals:
+            current_var = _stats.variance(aoa_vals) if len(aoa_vals) > 1 else 0.0
+            _aoa_history.append(current_var)
+            if len(_aoa_history) > 3:
+                _aoa_history[:] = _aoa_history[-3:]
+        avg_aoa_var = _stats.mean(_aoa_history) if _aoa_history else 0.0
+
         mobility = analyze_mobility(telemetry_batch, weather, crowd_size=1500, tick=_tick)
         mobility_dict = mobility.model_dump(mode="json")
-        correlated_events = _compute_correlated_events(telemetry_batch, mobility, weather)
+        correlated_events = _compute_correlated_events(
+            telemetry_batch, mobility, weather, _tick,
+            cross_tick_ta_rising_pct, avg_aoa_var
+        )
 
         adk_output = None
         if ADK_RUNNER_AVAILABLE and _tick % 5 == 0:
             try:
-                kpis = {
-                    "subscriber_satisfaction_score": 80.0,
-                    "vip_qoe_score": 85.0,
-                    "congestion_risk": 30.0,
-                    "sla_health": 90.0,
-                    "predicted_mobility_pressure": 50.0,
-                }
+                kpis = get_kpi_snapshot()
                 adk_output = await run_agent_analysis(
                     tick=_tick,
-                    telemetry_context={"active_ues": len(telemetry_batch), "kpis": kpis},
+                    telemetry_context={
+                        "active_ues": len(telemetry_batch),
+                        "subscriber_satisfaction_score": kpis.subscriber_satisfaction_score,
+                        "vip_qoe_score": kpis.vip_qoe_score,
+                        "congestion_risk": kpis.congestion_risk,
+                        "sla_health": kpis.sla_health,
+                        "predicted_mobility_pressure": kpis.predicted_mobility_pressure,
+                    },
                     ran_alerts=_ran_alerts,
                     mobility_state=mobility_dict,
                     weather_state=weather.model_dump(mode="json"),
@@ -858,10 +904,6 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
         reasoning_entry = _build_reasoning_entry(
             _tick, adk_output, correlated_events, _recent_actions, {}
         )
-        _reasoning_log.append(reasoning_entry)
-        if len(_reasoning_log) > 50:
-            _reasoning_log = _reasoning_log[-50:]
-
         try:
             store_agent_reasoning(
                 agent_name="intent_orchestration_agent",
@@ -873,6 +915,8 @@ async def stream_telemetry() -> AsyncGenerator[Dict, None]:
             )
         except Exception:
             pass
+
+        _reasoning_log.append(reasoning_entry)
 
         if _tick % 10 == 0:
             _recent_actions = _propose_and_validate_actions(

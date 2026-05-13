@@ -575,7 +575,11 @@ def _render_ai_fragment():
     st.divider()
 
     st.markdown("### 🤖 Multi-Agent Reasoning Console")
-    reasoning = payload.get("reasoning", [])
+    # Read reasoning from the SSE payload stored in session state by _drain_queue().
+    # Note: get_reasoning_summary() reads telemetry_service._reasoning_log which is
+    # scoped to the Streamlit process and never populated — the SSE payload's
+    # "reasoning" field (populated by streamer._reasoning_log) is the live source.
+    reasoning = payload.get("reasoning", []) if payload else []
     agent_reasoning_panel(reasoning)
     st.divider()
 
